@@ -1,0 +1,13 @@
+{
+    "python.defaultInterpreterPath": "D:/ChilliGuard/backend/venv/Scripts/python.exe",
+    "python.analysis.extraPaths": [
+        "./",
+        "../"
+    ],
+    "python.analysis.typeCheckingMode": "off",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingImports": "none",
+        "reportMissingModuleSource": "none"
+    },
+    "python.terminal.activateEnvInCurrentTerminal": true
+}

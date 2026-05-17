@@ -1,97 +1,93 @@
-# ChilliGuard 🌶️
+# ChilliGuard
 
-> AI-powered chili plant disease detection with post-diagnosis chat interface.
+AI-powered chili disease detection with a CNN backend and a Next.js frontend.
 
-## Monorepo Structure
+## Structure
 
-```
+```text
 ChilliGuard/
-├── frontend/          # Next.js 15 + Tailwind CSS + shadcn/ui
-└── backend/           # FastAPI + Python (CNN model serving)
+|-- Dataset/    # ImageFolder-style training dataset
+|-- backend/    # FastAPI API + PyTorch training and inference
+`-- frontend/   # Next.js app
 ```
 
----
+## Dataset classes
 
-## Quick Start
+The current dataset contains 9 classes:
 
-### 1. Backend
+1. `chilli_anthracnos`
+2. `chilli_damping_off`
+3. `chilli_healthy_fruit`
+4. `chilli_healthy_leaf`
+5. `chilli_leaf_curl_virus`
+6. `chilli_leaf_spot`
+7. `chilli_veinal_mottle_virus`
+8. `chilli_whitefly`
+9. `chilli_yellowish`
 
-```bash
-cd backend
+## Backend setup
 
-# Create & activate virtual environment (Python 3.10+)
+```powershell
+cd D:\ChilliGuard\backend
 py -m venv venv
 .\venv\Scripts\Activate.ps1
-
-# Install dependencies
 pip install -r requirements.txt
+Copy-Item .env.example .env
+```
 
-# Run dev server
+Run the API:
+
+```powershell
 uvicorn main:app --reload --port 8000
 ```
 
-API docs available at → http://localhost:8000/docs
+Important endpoints:
 
----
+- `GET /health`
+- `POST /predict`
+- `GET /diseases`
 
-### 2. Frontend
+## Train or retrain the CNN
 
-```bash
-cd frontend
+From `D:\ChilliGuard\backend`:
 
-# Copy env file
-cp .env.example .env.local
-# → Fill in GEMINI_API_KEY
+```powershell
+.\venv\Scripts\Activate.ps1
+python train_model.py
+```
 
-# Install dependencies
+Useful optional flags:
+
+```powershell
+python train_model.py --epochs 15 --batch-size 16 --num-workers 0
+```
+
+Training will generate:
+
+- `backend/model/chilliscan_cnn.pth`
+- `backend/model/class_names.json`
+- `backend/model/training_history.png`
+- `backend/model/training_metrics.json`
+
+## Frontend setup
+
+```powershell
+cd D:\ChilliGuard\frontend
+Copy-Item .env.example .env.local
 npm install
-
-# Run dev server
 npm run dev
 ```
 
-App available at → http://localhost:3000
+Set these values in `.env.local`:
 
----
-
-## Key Endpoints
-
-| Method | URL | Description |
-|--------|-----|-------------|
-| GET  | `/health` | Health check |
-| POST | `/predict` | Upload image → CNN prediction |
-| POST | `/api/chat` *(Next.js)* | Proxied Gemini chat |
-
----
-
-## Environment Variables
-
-### Backend (`backend/.env`)
-| Variable | Description |
-|----------|-------------|
-| `MODEL_PATH` | Path to trained `.h5` / `.pt` model file |
-| `GEMINI_API_KEY` | Optional — if backend proxies LLM |
-
-### Frontend (`frontend/.env.local`)
-| Variable | Description |
-|----------|-------------|
-| `NEXT_PUBLIC_API_URL` | FastAPI base URL (default: `http://localhost:8000`) |
-| `GEMINI_API_KEY` | Gemini API key for `/api/chat` route |
-
----
-
-## Replacing the Mock Model
-
-Open `backend/main.py` and replace `mock_predict()` with your real TensorFlow/PyTorch inference:
-
-```python
-def real_predict(image_bytes: bytes) -> PredictionResult:
-    img = preprocess(image_bytes)          # resize, normalize
-    logits = model.predict(img)            # your CNN
-    idx = logits.argmax()
-    return PredictionResult(
-        label=DISEASE_CATALOGUE[idx]["label"],
-        confidence=float(logits[idx]),
-        ...
-    )
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+BACKEND_API_URL=http://127.0.0.1:8000
 ```
+
+The web app now uses Next.js API routes as a proxy for the FastAPI backend:
+
+- `POST /api/predict` -> FastAPI `POST /predict`
+- `GET /api/health` -> FastAPI `GET /health`
+
+That means the browser no longer calls the Python API directly, so local web usage is more reliable and does not depend on client-side CORS setup.

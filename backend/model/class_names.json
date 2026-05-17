@@ -1,0 +1,73 @@
+{
+  "class_names": [
+    "Antraknosa",
+    "Layu Fusarium",
+    "Sehat (Buah)",
+    "Sehat (Daun)",
+    "Virus Keriting Daun",
+    "Bercak Daun",
+    "Virus Mottle Vena",
+    "Kutu Kebul",
+    "Menguning"
+  ],
+  "class_names_raw": [
+    "chilli_anthracnos",
+    "chilli_damping_off",
+    "chilli_healthy_fruit",
+    "chilli_healthy_leaf",
+    "chilli_leaf_curl_virus",
+    "chilli_leaf_spot",
+    "chilli_veinal_mottle_virus",
+    "chilli_whitefly",
+    "chilli_yellowish"
+  ],
+  "metadata": {
+    "Antraknosa": {
+      "label_en": "Anthracnose",
+      "severity": "parah",
+      "disease_id": 1
+    },
+    "Layu Fusarium": {
+      "label_en": "Damping Off",
+      "severity": "parah",
+      "disease_id": 5
+    },
+    "Sehat (Buah)": {
+      "label_en": "Healthy Fruit",
+      "severity": "sehat",
+      "disease_id": 8
+    },
+    "Sehat (Daun)": {
+      "label_en": "Healthy Leaf",
+      "severity": "sehat",
+      "disease_id": 8
+    },
+    "Virus Keriting Daun": {
+      "label_en": "Leaf Curl Virus",
+      "severity": "parah",
+      "disease_id": 2
+    },
+    "Bercak Daun": {
+      "label_en": "Leaf Spot",
+      "severity": "ringan",
+      "disease_id": 3
+    },
+    "Virus Mottle Vena": {
+      "label_en": "Veinal Mottle Virus",
+      "severity": "parah",
+      "disease_id": 7
+    },
+    "Kutu Kebul": {
+      "label_en": "Whitefly",
+      "severity": "ringan",
+      "disease_id": 4
+    },
+    "Menguning": {
+      "label_en": "Yellowish",
+      "severity": "ringan",
+      "disease_id": 6
+    }
+  },
+  "num_classes": 9,
+  "img_size": 224
+}

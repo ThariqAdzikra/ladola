@@ -1,54 +1,38 @@
 """
-ChilliScan — CNN Training Script
-=================================
-Trains a MobileNetV2 (transfer learning) on the chilli disease dataset.
+Train a MobileNetV2 classifier for the ChilliGuard dataset.
 
-Usage:
-    source venv/bin/activate
-    python train_model.py
-
-Output:
-    model/chilliscan_cnn.pth    — Trained model weights
-    model/class_names.json      — Index → class name mapping
-    model/training_history.png  — Loss & accuracy curves
+Outputs:
+    model/chilliscan_cnn.pth
+    model/class_names.json
+    model/training_history.png
+    model/training_metrics.json
 """
 
+from __future__ import annotations
+
+import argparse
 import json
 import os
+import random
 import time
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 import matplotlib
-matplotlib.use("Agg")  # Non-interactive backend
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, WeightedRandomSampler
-from torchvision import datasets, models, transforms
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader, Dataset, Subset, WeightedRandomSampler
+from torchvision import datasets, models, transforms
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-DATASET_DIR = Path(__file__).parent.parent / "Dataset"
-MODEL_DIR = Path(__file__).parent / "model"
-MODEL_PATH = MODEL_DIR / "chilliscan_cnn.pth"
-CLASS_NAMES_PATH = MODEL_DIR / "class_names.json"
-HISTORY_PLOT_PATH = MODEL_DIR / "training_history.png"
 
-IMG_SIZE = 224
-BATCH_SIZE = 32
-NUM_EPOCHS = 25
-LEARNING_RATE = 1e-3
-FINE_TUNE_LR = 1e-5
-EARLY_STOP_PATIENCE = 5
-NUM_WORKERS = 4
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# Human-readable class name mapping (folder name → display name)
 CLASS_DISPLAY_NAMES = {
     "chilli_anthracnos": "Antraknosa",
     "chilli_damping_off": "Layu Fusarium",
@@ -61,7 +45,6 @@ CLASS_DISPLAY_NAMES = {
     "chilli_yellowish": "Menguning",
 }
 
-# Metadata for each class (maps to frontend DISEASES array)
 CLASS_METADATA = {
     "Antraknosa": {"label_en": "Anthracnose", "severity": "parah", "disease_id": 1},
     "Layu Fusarium": {"label_en": "Damping Off", "severity": "parah", "disease_id": 5},
@@ -75,349 +58,495 @@ CLASS_METADATA = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Data Transforms
-# ---------------------------------------------------------------------------
-train_transforms = transforms.Compose([
-    transforms.RandomResizedCrop(IMG_SIZE, scale=(0.8, 1.0)),
-    transforms.RandomHorizontalFlip(),
-    transforms.RandomVerticalFlip(p=0.2),
-    transforms.RandomRotation(15),
-    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-])
+@dataclass
+class TrainingConfig:
+    dataset_dir: Path
+    model_dir: Path
+    img_size: int = 224
+    batch_size: int = 32
+    epochs: int = 25
+    freeze_epochs: int = 10
+    learning_rate: float = 1e-3
+    fine_tune_lr: float = 1e-5
+    val_split: float = 0.2
+    early_stop_patience: int = 5
+    num_workers: int = 0
+    seed: int = 42
 
-val_transforms = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(IMG_SIZE),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-])
+    @property
+    def model_path(self) -> Path:
+        return self.model_dir / "chilliscan_cnn.pth"
 
+    @property
+    def class_names_path(self) -> Path:
+        return self.model_dir / "class_names.json"
 
-# ---------------------------------------------------------------------------
-# Dataset Setup with Stratified Split
-# ---------------------------------------------------------------------------
-def create_datasets():
-    """Create train/val datasets with stratified split."""
-    full_dataset = datasets.ImageFolder(str(DATASET_DIR))
-    class_names_raw = full_dataset.classes  # folder names sorted
-    
-    # Map folder names to display names
-    class_names = [CLASS_DISPLAY_NAMES.get(name, name) for name in class_names_raw]
-    
-    targets = full_dataset.targets
-    indices = list(range(len(full_dataset)))
-    
-    train_idx, val_idx = train_test_split(
-        indices, test_size=0.2, stratify=targets, random_state=42
-    )
-    
-    # Create subsets
-    train_dataset = torch.utils.data.Subset(full_dataset, train_idx)
-    val_dataset = torch.utils.data.Subset(full_dataset, val_idx)
-    
-    # Apply transforms via wrapper
-    train_dataset = TransformDataset(train_dataset, train_transforms)
-    val_dataset = TransformDataset(val_dataset, val_transforms)
-    
-    # Compute class weights for WeightedRandomSampler
-    train_targets = [targets[i] for i in train_idx]
-    class_counts = np.bincount(train_targets, minlength=len(class_names))
-    class_weights = 1.0 / (class_counts + 1e-6)
-    sample_weights = [class_weights[t] for t in train_targets]
-    sampler = WeightedRandomSampler(
-        weights=sample_weights,
-        num_samples=len(sample_weights),
-        replacement=True,
-    )
-    
-    print(f"\n📊 Dataset Summary:")
-    print(f"   Total images: {len(full_dataset)}")
-    print(f"   Training: {len(train_idx)} | Validation: {len(val_idx)}")
-    print(f"\n   Class distribution:")
-    for i, (name, count) in enumerate(zip(class_names, class_counts)):
-        print(f"   [{i}] {name:25s} → {count:5d} train samples (weight: {class_weights[i]:.4f})")
-    
-    return train_dataset, val_dataset, sampler, class_names, class_names_raw
+    @property
+    def history_plot_path(self) -> Path:
+        return self.model_dir / "training_history.png"
+
+    @property
+    def metrics_path(self) -> Path:
+        return self.model_dir / "training_metrics.json"
 
 
-class TransformDataset(torch.utils.data.Dataset):
-    """Wrapper to apply transforms to a Subset."""
-    def __init__(self, subset, transform):
+class TransformDataset(Dataset):
+    def __init__(self, subset: Subset, transform: transforms.Compose):
         self.subset = subset
         self.transform = transform
-    
-    def __len__(self):
+
+    def __len__(self) -> int:
         return len(self.subset)
-    
-    def __getitem__(self, idx):
-        img, label = self.subset[idx]
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, int]:
+        image, label = self.subset[index]
         if self.transform:
-            img = self.transform(img)
-        return img, label
+            image = self.transform(image)
+        return image, label
 
 
-# ---------------------------------------------------------------------------
-# Model
-# ---------------------------------------------------------------------------
-def create_model(num_classes: int) -> nn.Module:
-    """Create MobileNetV2 with custom classification head."""
+def build_arg_parser() -> argparse.ArgumentParser:
+    repo_root = Path(__file__).resolve().parent.parent
+    default_workers = 0 if os.name == "nt" else min(4, os.cpu_count() or 1)
+
+    parser = argparse.ArgumentParser(description="Train the ChilliGuard CNN model.")
+    parser.add_argument("--dataset-dir", type=Path, default=repo_root / "Dataset")
+    parser.add_argument("--model-dir", type=Path, default=Path(__file__).resolve().parent / "model")
+    parser.add_argument("--img-size", type=int, default=224)
+    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--epochs", type=int, default=25)
+    parser.add_argument("--freeze-epochs", type=int, default=10)
+    parser.add_argument("--learning-rate", type=float, default=1e-3)
+    parser.add_argument("--fine-tune-lr", type=float, default=1e-5)
+    parser.add_argument("--val-split", type=float, default=0.2)
+    parser.add_argument("--early-stop-patience", type=int, default=5)
+    parser.add_argument("--num-workers", type=int, default=default_workers)
+    parser.add_argument("--seed", type=int, default=42)
+    return parser
+
+
+def parse_config() -> TrainingConfig:
+    args = build_arg_parser().parse_args()
+    return TrainingConfig(
+        dataset_dir=args.dataset_dir.resolve(),
+        model_dir=args.model_dir.resolve(),
+        img_size=args.img_size,
+        batch_size=args.batch_size,
+        epochs=args.epochs,
+        freeze_epochs=args.freeze_epochs,
+        learning_rate=args.learning_rate,
+        fine_tune_lr=args.fine_tune_lr,
+        val_split=args.val_split,
+        early_stop_patience=args.early_stop_patience,
+        num_workers=args.num_workers,
+        seed=args.seed,
+    )
+
+
+def seed_everything(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+def build_transforms(img_size: int) -> tuple[transforms.Compose, transforms.Compose]:
+    train_transforms = transforms.Compose(
+        [
+            transforms.RandomResizedCrop(img_size, scale=(0.8, 1.0)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(p=0.2),
+            transforms.RandomRotation(15),
+            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ]
+    )
+    val_transforms = transforms.Compose(
+        [
+            transforms.Resize(256),
+            transforms.CenterCrop(img_size),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ]
+    )
+    return train_transforms, val_transforms
+
+
+def validate_dataset(config: TrainingConfig) -> None:
+    if not config.dataset_dir.exists():
+        raise FileNotFoundError(f"Dataset directory not found: {config.dataset_dir}")
+    folders = [path for path in config.dataset_dir.iterdir() if path.is_dir()]
+    if not folders:
+        raise FileNotFoundError(f"No class folders found in dataset: {config.dataset_dir}")
+
+
+def create_datasets(
+    config: TrainingConfig,
+) -> tuple[Dataset, Dataset, WeightedRandomSampler, list[str], list[str], np.ndarray]:
+    full_dataset = datasets.ImageFolder(str(config.dataset_dir))
+    class_names_raw = full_dataset.classes
+    class_names = [CLASS_DISPLAY_NAMES.get(name, name) for name in class_names_raw]
+    targets = np.array(full_dataset.targets)
+    indices = np.arange(len(full_dataset))
+
+    train_idx, val_idx = train_test_split(
+        indices,
+        test_size=config.val_split,
+        stratify=targets,
+        random_state=config.seed,
+    )
+
+    train_transforms, val_transforms = build_transforms(config.img_size)
+    train_subset = TransformDataset(Subset(full_dataset, train_idx.tolist()), train_transforms)
+    val_subset = TransformDataset(Subset(full_dataset, val_idx.tolist()), val_transforms)
+
+    train_targets = targets[train_idx]
+    class_counts = np.bincount(train_targets, minlength=len(class_names))
+    class_weights = 1.0 / (class_counts + 1e-6)
+    sample_weights = [float(class_weights[label]) for label in train_targets]
+    sampler = WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
+
+    print("\nDataset summary")
+    print(f"  Total images : {len(full_dataset)}")
+    print(f"  Train split  : {len(train_idx)}")
+    print(f"  Val split    : {len(val_idx)}")
+    print("  Classes")
+    for index, (name, count) in enumerate(zip(class_names, class_counts, strict=False)):
+        print(f"    [{index}] {name:<24} train={int(count):>4} weight={class_weights[index]:.5f}")
+
+    return train_subset, val_subset, sampler, class_names, class_names_raw, class_counts
+
+
+def create_data_loaders(
+    train_dataset: Dataset,
+    val_dataset: Dataset,
+    sampler: WeightedRandomSampler,
+    config: TrainingConfig,
+) -> tuple[DataLoader, DataLoader]:
+    common = {
+        "batch_size": config.batch_size,
+        "num_workers": config.num_workers,
+        "pin_memory": torch.cuda.is_available(),
+        "persistent_workers": config.num_workers > 0,
+    }
+    train_loader = DataLoader(train_dataset, sampler=sampler, **common)
+    val_loader = DataLoader(val_dataset, shuffle=False, **common)
+    return train_loader, val_loader
+
+
+def create_model(num_classes: int, device: torch.device) -> nn.Module:
     model = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.IMAGENET1K_V1)
-    
-    # Freeze base layers
     for param in model.features.parameters():
         param.requires_grad = False
-    
-    # Replace classifier
     model.classifier = nn.Sequential(
         nn.Dropout(p=0.3),
         nn.Linear(model.last_channel, num_classes),
     )
-    
-    return model.to(DEVICE)
+    return model.to(device)
 
 
-def unfreeze_top_layers(model: nn.Module, num_layers: int = 5):
-    """Unfreeze the last N feature layers for fine-tuning."""
-    layers = list(model.features.children())
-    for layer in layers[-num_layers:]:
+def unfreeze_top_layers(model: nn.Module, num_layers: int = 5) -> None:
+    for layer in list(model.features.children())[-num_layers:]:
         for param in layer.parameters():
             param.requires_grad = True
 
 
-# ---------------------------------------------------------------------------
-# Training Loop
-# ---------------------------------------------------------------------------
-def train_one_epoch(model, dataloader, criterion, optimizer):
+def load_state_dict(path: Path, device: torch.device) -> dict[str, torch.Tensor]:
+    try:
+        return torch.load(path, map_location=device, weights_only=True)
+    except TypeError:
+        return torch.load(path, map_location=device)
+
+
+def train_one_epoch(
+    model: nn.Module,
+    dataloader: DataLoader,
+    criterion: nn.Module,
+    optimizer: optim.Optimizer,
+    device: torch.device,
+) -> tuple[float, float]:
     model.train()
     running_loss = 0.0
     correct = 0
     total = 0
-    
+
     for images, labels in dataloader:
-        images, labels = images.to(DEVICE), labels.to(DEVICE)
-        
+        images, labels = images.to(device), labels.to(device)
         optimizer.zero_grad()
         outputs = model(images)
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
-        
+
         running_loss += loss.item() * images.size(0)
         _, predicted = outputs.max(1)
         total += labels.size(0)
         correct += predicted.eq(labels).sum().item()
-    
-    return running_loss / total, correct / total
+
+    return running_loss / max(total, 1), correct / max(total, 1)
 
 
-def validate(model, dataloader, criterion):
+def validate(
+    model: nn.Module,
+    dataloader: DataLoader,
+    criterion: nn.Module,
+    device: torch.device,
+) -> tuple[float, float, list[int], list[int]]:
     model.eval()
     running_loss = 0.0
     correct = 0
     total = 0
-    all_preds = []
-    all_labels = []
-    
+    all_preds: list[int] = []
+    all_labels: list[int] = []
+
     with torch.no_grad():
         for images, labels in dataloader:
-            images, labels = images.to(DEVICE), labels.to(DEVICE)
+            images, labels = images.to(device), labels.to(device)
             outputs = model(images)
             loss = criterion(outputs, labels)
-            
+
             running_loss += loss.item() * images.size(0)
             _, predicted = outputs.max(1)
             total += labels.size(0)
             correct += predicted.eq(labels).sum().item()
-            
-            all_preds.extend(predicted.cpu().numpy())
-            all_labels.extend(labels.cpu().numpy())
-    
-    return running_loss / total, correct / total, all_preds, all_labels
+            all_preds.extend(predicted.cpu().tolist())
+            all_labels.extend(labels.cpu().tolist())
+
+    return running_loss / max(total, 1), correct / max(total, 1), all_preds, all_labels
 
 
-def plot_history(history: dict, save_path: Path):
-    """Plot training/validation loss and accuracy curves."""
+def plot_history(history: dict[str, list[float]], save_path: Path) -> None:
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-    
     epochs = range(1, len(history["train_loss"]) + 1)
-    
-    ax1.plot(epochs, history["train_loss"], "b-o", label="Train Loss", markersize=3)
-    ax1.plot(epochs, history["val_loss"], "r-o", label="Val Loss", markersize=3)
-    ax1.set_title("Loss", fontsize=14, fontweight="bold")
+
+    ax1.plot(epochs, history["train_loss"], "b-o", label="Train loss", markersize=3)
+    ax1.plot(epochs, history["val_loss"], "r-o", label="Val loss", markersize=3)
+    ax1.set_title("Loss")
     ax1.set_xlabel("Epoch")
     ax1.set_ylabel("Loss")
-    ax1.legend()
     ax1.grid(True, alpha=0.3)
-    
-    ax2.plot(epochs, history["train_acc"], "b-o", label="Train Acc", markersize=3)
-    ax2.plot(epochs, history["val_acc"], "r-o", label="Val Acc", markersize=3)
-    ax2.set_title("Accuracy", fontsize=14, fontweight="bold")
+    ax1.legend()
+
+    ax2.plot(epochs, history["train_acc"], "b-o", label="Train acc", markersize=3)
+    ax2.plot(epochs, history["val_acc"], "r-o", label="Val acc", markersize=3)
+    ax2.set_title("Accuracy")
     ax2.set_xlabel("Epoch")
     ax2.set_ylabel("Accuracy")
-    ax2.legend()
     ax2.grid(True, alpha=0.3)
-    
+    ax2.legend()
+
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches="tight")
-    print(f"\n📈 Training plot saved to {save_path}")
+    plt.close(fig)
+    print(f"Saved training curve to {save_path}")
 
 
-# ---------------------------------------------------------------------------
-# Main Training Flow
-# ---------------------------------------------------------------------------
-def main():
-    print("=" * 60)
-    print("🌶️  ChilliScan — CNN Training")
-    print("=" * 60)
-    print(f"Device: {DEVICE}")
-    print(f"Dataset: {DATASET_DIR}")
-    
-    # Create output dir
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    
-    # Load data
-    train_dataset, val_dataset, sampler, class_names, class_names_raw = create_datasets()
-    num_classes = len(class_names)
-    
-    train_loader = DataLoader(
-        train_dataset, batch_size=BATCH_SIZE, sampler=sampler,
-        num_workers=NUM_WORKERS, pin_memory=True,
-    )
-    val_loader = DataLoader(
-        val_dataset, batch_size=BATCH_SIZE, shuffle=False,
-        num_workers=NUM_WORKERS, pin_memory=True,
-    )
-    
-    # Create model
-    model = create_model(num_classes)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.classifier.parameters(), lr=LEARNING_RATE)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", factor=0.5, patience=2
-    )
-    
-    # Training history
-    history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
-    best_val_acc = 0.0
-    patience_counter = 0
-    
-    # ---- Phase 1: Train classifier head (frozen base) ----
-    print(f"\n{'='*60}")
-    print("📌 Phase 1: Training classifier head (base frozen)")
-    print(f"{'='*60}")
-    
-    phase1_epochs = min(10, NUM_EPOCHS // 2)
-    for epoch in range(1, phase1_epochs + 1):
-        t0 = time.time()
-        train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer)
-        val_loss, val_acc, _, _ = validate(model, val_loader, criterion)
-        scheduler.step(val_loss)
-        elapsed = time.time() - t0
-        
-        history["train_loss"].append(train_loss)
-        history["train_acc"].append(train_acc)
-        history["val_loss"].append(val_loss)
-        history["val_acc"].append(val_acc)
-        
-        print(
-            f"  Epoch {epoch:2d}/{phase1_epochs} | "
-            f"Train Loss: {train_loss:.4f} Acc: {train_acc:.4f} | "
-            f"Val Loss: {val_loss:.4f} Acc: {val_acc:.4f} | "
-            f"{elapsed:.1f}s"
-        )
-        
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            torch.save(model.state_dict(), MODEL_PATH)
-            patience_counter = 0
-        else:
-            patience_counter += 1
-            if patience_counter >= EARLY_STOP_PATIENCE:
-                print(f"  ⚠️ Early stopping at epoch {epoch}")
-                break
-    
-    # ---- Phase 2: Fine-tune top layers ----
-    print(f"\n{'='*60}")
-    print("🔧 Phase 2: Fine-tuning top layers")
-    print(f"{'='*60}")
-    
-    # Load best model from phase 1
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE, weights_only=True))
-    unfreeze_top_layers(model, num_layers=5)
-    
-    # Lower learning rate for fine-tuning
-    optimizer = optim.Adam([
-        {"params": model.features.parameters(), "lr": FINE_TUNE_LR},
-        {"params": model.classifier.parameters(), "lr": FINE_TUNE_LR * 10},
-    ])
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", factor=0.5, patience=2
-    )
-    patience_counter = 0
-    
-    remaining_epochs = NUM_EPOCHS - phase1_epochs
-    for epoch in range(1, remaining_epochs + 1):
-        t0 = time.time()
-        train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer)
-        val_loss, val_acc, _, _ = validate(model, val_loader, criterion)
-        scheduler.step(val_loss)
-        elapsed = time.time() - t0
-        
-        history["train_loss"].append(train_loss)
-        history["train_acc"].append(train_acc)
-        history["val_loss"].append(val_loss)
-        history["val_acc"].append(val_acc)
-        
-        print(
-            f"  Epoch {epoch:2d}/{remaining_epochs} | "
-            f"Train Loss: {train_loss:.4f} Acc: {train_acc:.4f} | "
-            f"Val Loss: {val_loss:.4f} Acc: {val_acc:.4f} | "
-            f"{elapsed:.1f}s"
-        )
-        
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            torch.save(model.state_dict(), MODEL_PATH)
-            patience_counter = 0
-        else:
-            patience_counter += 1
-            if patience_counter >= EARLY_STOP_PATIENCE:
-                print(f"  ⚠️ Early stopping at epoch {epoch}")
-                break
-    
-    # ---- Final Evaluation ----
-    print(f"\n{'='*60}")
-    print("📊 Final Evaluation")
-    print(f"{'='*60}")
-    
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE, weights_only=True))
-    _, final_acc, all_preds, all_labels = validate(model, val_loader, criterion)
-    
-    print(f"\n✅ Best Validation Accuracy: {best_val_acc:.4f} ({best_val_acc*100:.1f}%)")
-    print(f"\nClassification Report:")
-    print(classification_report(all_labels, all_preds, target_names=class_names))
-    
-    # Save class names
-    class_info = {
+def save_class_info(
+    config: TrainingConfig,
+    class_names: list[str],
+    class_names_raw: list[str],
+    best_val_accuracy: float,
+) -> None:
+    payload = {
         "class_names": class_names,
         "class_names_raw": class_names_raw,
-        "metadata": CLASS_METADATA,
-        "num_classes": num_classes,
-        "img_size": IMG_SIZE,
-        "best_val_accuracy": round(best_val_acc, 4),
+        "metadata": {name: CLASS_METADATA.get(name, {}) for name in class_names},
+        "num_classes": len(class_names),
+        "img_size": config.img_size,
+        "best_val_accuracy": round(best_val_accuracy, 4),
     }
-    with open(CLASS_NAMES_PATH, "w", encoding="utf-8") as f:
-        json.dump(class_info, f, ensure_ascii=False, indent=2)
-    print(f"📄 Class names saved to {CLASS_NAMES_PATH}")
-    
-    # Plot history
-    plot_history(history, HISTORY_PLOT_PATH)
-    
-    print(f"\n🎉 Model saved to {MODEL_PATH}")
-    print(f"   File size: {MODEL_PATH.stat().st_size / 1024 / 1024:.1f} MB")
+    with open(config.class_names_path, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+    print(f"Saved class metadata to {config.class_names_path}")
+
+
+def save_metrics(
+    config: TrainingConfig,
+    history: dict[str, list[float]],
+    class_names: list[str],
+    class_counts: np.ndarray,
+    best_val_accuracy: float,
+    final_val_accuracy: float,
+    report: dict[str, Any],
+    matrix: np.ndarray,
+) -> None:
+    payload = {
+        "config": {
+            **asdict(config),
+            "dataset_dir": str(config.dataset_dir),
+            "model_dir": str(config.model_dir),
+        },
+        "class_names": class_names,
+        "class_counts": [int(value) for value in class_counts.tolist()],
+        "best_val_accuracy": round(best_val_accuracy, 4),
+        "final_val_accuracy": round(final_val_accuracy, 4),
+        "history": {key: [round(float(item), 6) for item in values] for key, values in history.items()},
+        "classification_report": report,
+        "confusion_matrix": matrix.tolist(),
+    }
+    with open(config.metrics_path, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+    print(f"Saved training metrics to {config.metrics_path}")
+
+
+def run_training(
+    model: nn.Module,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    criterion: nn.Module,
+    optimizer: optim.Optimizer,
+    scheduler: optim.lr_scheduler.ReduceLROnPlateau,
+    config: TrainingConfig,
+    device: torch.device,
+    phase_label: str,
+    start_epoch: int,
+    total_epochs: int,
+    history: dict[str, list[float]],
+    best_val_accuracy: float,
+) -> tuple[float, int]:
+    patience_counter = 0
+
+    print(f"\n{phase_label}")
+    print("-" * len(phase_label))
+
+    for epoch in range(start_epoch, total_epochs + 1):
+        t0 = time.time()
+        train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, device)
+        val_loss, val_acc, _, _ = validate(model, val_loader, criterion, device)
+        scheduler.step(val_loss)
+        elapsed = time.time() - t0
+
+        history["train_loss"].append(train_loss)
+        history["train_acc"].append(train_acc)
+        history["val_loss"].append(val_loss)
+        history["val_acc"].append(val_acc)
+
+        print(
+            f"Epoch {epoch:02d}/{total_epochs} | "
+            f"train_loss={train_loss:.4f} train_acc={train_acc:.4f} | "
+            f"val_loss={val_loss:.4f} val_acc={val_acc:.4f} | "
+            f"{elapsed:.1f}s"
+        )
+
+        if val_acc > best_val_accuracy:
+            best_val_accuracy = val_acc
+            torch.save(model.state_dict(), config.model_path)
+            patience_counter = 0
+        else:
+            patience_counter += 1
+            if patience_counter >= config.early_stop_patience:
+                print(f"Early stopping triggered at epoch {epoch}.")
+                return best_val_accuracy, epoch
+
+    return best_val_accuracy, total_epochs
+
+
+def main() -> None:
+    config = parse_config()
+    validate_dataset(config)
+    config.model_dir.mkdir(parents=True, exist_ok=True)
+    seed_everything(config.seed)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("=" * 60)
+    print("ChilliGuard CNN Training")
+    print("=" * 60)
+    print(f"Device      : {device}")
+    print(f"Dataset dir : {config.dataset_dir}")
+    print(f"Model dir   : {config.model_dir}")
+
+    train_dataset, val_dataset, sampler, class_names, class_names_raw, class_counts = create_datasets(config)
+    train_loader, val_loader = create_data_loaders(train_dataset, val_dataset, sampler, config)
+
+    model = create_model(len(class_names), device)
+    criterion = nn.CrossEntropyLoss()
+    history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
+    best_val_accuracy = 0.0
+
+    phase1_epochs = min(max(config.freeze_epochs, 0), config.epochs)
+    if phase1_epochs > 0:
+        optimizer = optim.Adam(model.classifier.parameters(), lr=config.learning_rate)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=2)
+        best_val_accuracy, _ = run_training(
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            criterion=criterion,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            config=config,
+            device=device,
+            phase_label="Phase 1 - train classifier head",
+            start_epoch=1,
+            total_epochs=phase1_epochs,
+            history=history,
+            best_val_accuracy=best_val_accuracy,
+        )
+
+    remaining_epochs = max(config.epochs - phase1_epochs, 0)
+    if remaining_epochs > 0 and config.model_path.exists():
+        model.load_state_dict(load_state_dict(config.model_path, device))
+        unfreeze_top_layers(model, num_layers=5)
+        optimizer = optim.Adam(
+            [
+                {"params": model.features.parameters(), "lr": config.fine_tune_lr},
+                {"params": model.classifier.parameters(), "lr": config.fine_tune_lr * 10},
+            ]
+        )
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=2)
+        best_val_accuracy, _ = run_training(
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            criterion=criterion,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            config=config,
+            device=device,
+            phase_label="Phase 2 - fine tune top feature layers",
+            start_epoch=phase1_epochs + 1,
+            total_epochs=config.epochs,
+            history=history,
+            best_val_accuracy=best_val_accuracy,
+        )
+
+    if not config.model_path.exists():
+        raise RuntimeError("Training finished without producing a model checkpoint.")
+
+    model.load_state_dict(load_state_dict(config.model_path, device))
+    _, final_val_accuracy, all_preds, all_labels = validate(model, val_loader, criterion, device)
+
+    report_text = classification_report(all_labels, all_preds, target_names=class_names, zero_division=0)
+    report_dict = classification_report(
+        all_labels,
+        all_preds,
+        target_names=class_names,
+        zero_division=0,
+        output_dict=True,
+    )
+    matrix = confusion_matrix(all_labels, all_preds)
+
+    print("\nBest validation accuracy :", f"{best_val_accuracy:.4f}")
+    print("Final validation accuracy:", f"{final_val_accuracy:.4f}")
+    print("\nClassification report")
+    print(report_text)
+
+    save_class_info(config, class_names, class_names_raw, best_val_accuracy)
+    plot_history(history, config.history_plot_path)
+    save_metrics(
+        config=config,
+        history=history,
+        class_names=class_names,
+        class_counts=class_counts,
+        best_val_accuracy=best_val_accuracy,
+        final_val_accuracy=final_val_accuracy,
+        report=report_dict,
+        matrix=matrix,
+    )
+
+    print(f"\nModel saved to {config.model_path}")
     print("=" * 60)
 
 
