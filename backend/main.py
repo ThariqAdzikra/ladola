@@ -736,8 +736,8 @@ def integrated_save(req: IntegratedSaveRequest, db: Session = Depends(get_db)):
         # Verify existing session
         target_session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
         if not target_session:
-             # Fallback: create new
-             new_session = ChatSession(
+            # Fallback: create new
+            new_session = ChatSession(
                 user_id=user.id,
                 scan_id=new_scan.id,
                 title=req.title or req.disease_label
@@ -878,3 +878,7 @@ def add_message(session_id: int, req: MessageCreate, db: Session = Depends(get_d
     db.add(new_msg)
     db.commit()
     return {"status": "ok", "id": new_msg.id}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
