@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import time
 import traceback
 from pathlib import Path
@@ -16,15 +17,25 @@ from typing import Any
 from contextlib import asynccontextmanager
 
 # Third-party imports
+# pyrefly: ignore [missing-import]
 import torch
+# pyrefly: ignore [missing-import]
 import torch.nn as nn
+# pyrefly: ignore [missing-import]
 from torchvision import models as tv_models, transforms
+# pyrefly: ignore [missing-import]
 from PIL import Image
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
+# pyrefly: ignore [missing-import]
 from fastapi import FastAPI, File, HTTPException, UploadFile, Depends
+# pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel
+# pyrefly: ignore [missing-import]
 import google.generativeai as genai
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Session
 
 # Local imports
@@ -36,8 +47,9 @@ BASE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BASE_DIR.parent
 DEFAULT_MODEL_DIR = BASE_DIR / "model"
 
-# Load environment variables
+# Load environment variables from multiple possible locations
 load_dotenv(BASE_DIR / ".env")
+load_dotenv(REPO_ROOT / ".env")
 
 def _env_path(name: str, default: Path) -> Path:
     raw = os.getenv(name)
@@ -59,11 +71,28 @@ def _parse_origins(value: str | None) -> list[str]:
     return [origin.strip() for origin in value.split(",") if origin.strip()]
 
 
+def _parse_gemini_models(primary: str, fallbacks: str | None) -> list[str]:
+    model_names = [primary.strip()]
+    if fallbacks:
+        model_names.extend(model.strip() for model in fallbacks.split(",") if model.strip())
+
+    deduped: list[str] = []
+    for model_name in model_names:
+        if model_name and model_name not in deduped:
+            deduped.append(model_name)
+    return deduped
+
+
 MODEL_PATH = _env_path("MODEL_PATH", DEFAULT_MODEL_DIR / "chilliscan_cnn.pth")
 CLASS_NAMES_PATH = _env_path("CLASS_NAMES_PATH", DEFAULT_MODEL_DIR / "class_names.json")
 DATASET_DIR = _env_path("DATASET_DIR", REPO_ROOT / "Dataset")
 ALLOWED_ORIGINS = _parse_origins(os.getenv("ALLOWED_ORIGINS"))
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "10")) * 1024 * 1024
+GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+GEMINI_MODEL_NAMES = _parse_gemini_models(
+    GEMINI_MODEL_NAME,
+    os.getenv("GEMINI_FALLBACK_MODELS", "gemini-2.5-flash"),
+)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -71,7 +100,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 GENAI_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
 if GENAI_API_KEY:
     genai.configure(api_key=GENAI_API_KEY)
-    print("[info] Gemini AI configured")
+    print(f"[info] Gemini AI configured with models: {', '.join(GEMINI_MODEL_NAMES)}")
 else:
     print("[warn] GOOGLE_API_KEY or GEMINI_API_KEY not found in environment")
 
@@ -486,6 +515,67 @@ def _create_model(num_classes: int) -> nn.Module:
     return network
 
 
+def _is_gemini_quota_error(exc: Exception) -> bool:
+    error_text = f"{type(exc).__name__}: {exc}".lower()
+    return any(
+        token in error_text
+        for token in (
+            "429",
+            "quota",
+            "rate limit",
+            "rate-limits",
+            "resourceexhausted",
+            "resource exhausted",
+            "too many requests",
+        )
+    )
+
+
+def _extract_retry_delay_seconds(error_text: str) -> int | None:
+    retry_match = re.search(r"retry in\s+([\d.]+)s", error_text, re.IGNORECASE)
+    if retry_match:
+        try:
+            return max(1, round(float(retry_match.group(1))))
+        except ValueError:
+            return None
+
+    delay_match = re.search(r"retry_delay\s*\{\s*seconds:\s*(\d+)", error_text, re.IGNORECASE)
+    if delay_match:
+        return int(delay_match.group(1))
+    return None
+
+
+def _format_steps(items: list[Any]) -> str:
+    return "\n".join(f"{index}. {item}" for index, item in enumerate(items, start=1))
+
+
+def _offline_chat_response(request: ChatRequest, notice: str) -> ChatResponse:
+    p = request.prediction_context or {}
+    label = p.get("label", "hasil diagnosis")
+    question = request.message.lower()
+    symptoms = p.get("symptoms") or []
+    treatment = p.get("treatment") or []
+    prevention = p.get("prevention") or []
+
+    if any(keyword in question for keyword in ("gejala", "tanda", "awal", "waspada")) and symptoms:
+        body = f"Gejala yang perlu diperhatikan pada {label}:\n{_format_steps(symptoms)}"
+    elif any(keyword in question for keyword in ("cegah", "pencegahan", "hindari", "kembali")) and prevention:
+        body = f"Pencegahan yang disarankan untuk {label}:\n{_format_steps(prevention)}"
+    elif any(keyword in question for keyword in ("obat", "obati", "penanganan", "fungisida", "pestisida", "semprot", "dosis")) and treatment:
+        body = f"Langkah penanganan awal untuk {label}:\n{_format_steps(treatment)}"
+    else:
+        sections = [f"Berdasarkan hasil scan, tanaman terdeteksi {label}."]
+        if p.get("description"):
+            sections.append(str(p["description"]))
+        if treatment:
+            sections.append(f"Penanganan utama:\n{_format_steps(treatment[:3])}")
+        if prevention:
+            sections.append(f"Pencegahan lanjutan:\n{_format_steps(prevention[:3])}")
+        body = "\n\n".join(sections)
+
+    return ChatResponse(text=f"{notice}\n\n{body}")
+
+
 def load_model() -> None:
     global model, class_info, metadata_source, model_load_error
 
@@ -626,60 +716,147 @@ async def predict(file: UploadFile = File(...)) -> PredictionResult:
         max_size_mb = MAX_UPLOAD_BYTES // (1024 * 1024)
         raise HTTPException(status_code=413, detail=f"File too large. Max {max_size_mb} MB.")
 
+    # --- GUARDRAIL: Verify if it's a chilli plant/leaf ---
+    if GENAI_API_KEY:
+        try:
+            print(f"[debug] Running guardrail for file: {file.filename} ({file.content_type})")
+            guardrail_model = genai.GenerativeModel(GEMINI_MODEL_NAME)
+            image_part = {"mime_type": file.content_type, "data": contents}
+            prompt = (
+                "Identify all main objects in this image. "
+                "If there is a person, human, face, or part of a human, respond with 'HUMAN'. "
+                "If it is clearly a chilli plant, chilli leaf, or chilli fruit, respond with 'CHILLI'. "
+                "If it is neither, or if it is a random object, respond with 'OTHER'. "
+                "Be very strict: if you see a human, you MUST respond 'HUMAN'."
+            )
+            response = guardrail_model.generate_content([prompt, image_part])
+            decision = response.text.strip().upper()
+            print(f"[debug] Guardrail raw response: '{decision}'")
+            
+            # Rejection logic: must contain CHILLI and must NOT contain HUMAN
+            if "HUMAN" in decision or "CHILLI" not in decision:
+                print(f"[debug] Guardrail REJECTED the image. Reason: {decision}")
+                return PredictionResult(
+                    disease_id=-1,
+                    label="Bukan Tanaman Cabai",
+                    label_en="Not a Chilli Plant",
+                    confidence=1.0,
+                    severity="peringatan",
+                    type="none",
+                    description=f"Deteksi dibatalkan. ChilliGuard mendeteksi objek non-cabai ({decision.lower()}).",
+                    symptoms=[],
+                    treatment=[],
+                    prevention=[
+                        "Jangan arahkan kamera ke wajah atau orang lain.",
+                        "Pastikan objek utama foto adalah daun atau buah cabai.",
+                        "ChilliGuard hanya berfungsi untuk mendiagnosis tanaman cabai."
+                    ],
+                    all_scores=[],
+                    inference_time_ms=0.0
+                )
+            print("[debug] Guardrail PASSED the image")
+        except Exception as e:
+            print(f"[error] Guardrail error: {e}")
+            traceback.print_exc()
+
     return predict_image(contents)
 
 
 @app.post("/chat", response_model=ChatResponse, tags=["AI"])
 async def chat(request: ChatRequest) -> ChatResponse:
     if not GENAI_API_KEY:
-        raise HTTPException(status_code=501, detail="Gemini API key not configured on server")
-
-    try:
-        model_name = "gemini-flash-latest"
-        gemini_model = genai.GenerativeModel(model_name)
-        
-        p = request.prediction_context
-        context_prompt = (
-            f"Anda adalah asisten ahli tanaman cabai ChilliGuard.\n"
-            f"Deteksi: {p.get('label', 'Tidak diketahui')}\n"
-            f"Gejala: {', '.join(p.get('symptoms', []))}\n"
-            f"Penanganan: {', '.join(p.get('treatment', []))}\n"
-            f"Pencegahan: {', '.join(p.get('prevention', []))}\n\n"
-            "Jawablah dengan ramah dan praktis dalam bahasa Indonesia."
+        return _offline_chat_response(
+            request,
+            "Mode offline: Gemini API belum dikonfigurasi di server, jadi jawaban memakai data hasil diagnosis ChilliGuard.",
         )
 
+    try:
+        p = request.prediction_context
+        # Create a clean history for Gemini
         gemini_history = []
+        
+        # Add messages from request.history, ensuring alternating roles
+        last_role = None
         for msg in request.history:
-            if not msg.get("text"): continue
+            if not msg.get("text") or not msg.get("text").strip():
+                continue
+            
+            # Gemini roles must be 'user' or 'model'
             role = "user" if msg["role"] == "user" else "model"
+            
+            # Gemini doesn't allow two consecutive messages from the same role
+            if role == last_role:
+                if gemini_history:
+                    gemini_history[-1]["parts"][0] += f"\n\n{msg['text']}"
+                continue
+            
             gemini_history.append({"role": role, "parts": [msg["text"]]})
+            last_role = role
 
+        # Gemini history MUST start with a 'user' message
         if gemini_history and gemini_history[0]["role"] == "model":
-            gemini_history.insert(0, {"role": "user", "parts": ["Halo, saya butuh bantuan dengan tanaman cabai saya."]})
-
-        chat_session = gemini_model.start_chat(history=gemini_history)
+            gemini_history.insert(0, {"role": "user", "parts": ["Halo, saya butuh bantuan dengan hasil diagnosis cabai saya."]})
         
-        prompt = request.message
-        response = chat_session.send_message(prompt)
-        
-        if not response or not response.text:
-            return ChatResponse(text="Maaf, saya tidak mendapatkan jawaban dari AI. Coba tanya lagi?")
+        # Contextual prompt for the current question
+        context_prompt = (
+            f"Konteks Deteksi Tanaman Cabai:\n"
+            f"Penyakit: {p.get('label', 'Tidak diketahui')}\n"
+            f"Deskripsi: {p.get('description', '')}\n\n"
+            f"Pertanyaan Pengguna: {request.message}"
+        )
 
-        return ChatResponse(text=response.text)
+        system_instruction = (
+            "Anda adalah ChilliGuard AI, asisten khusus diagnosis penyakit tanaman cabai. "
+            "STRICT RULES:\n"
+            "1. HANYA jawab pertanyaan seputar tanaman cabai, penyakit cabai, dan perawatan cabai.\n"
+            "2. JANGAN PERNAH memberikan kode pemrograman (coding), skrip, atau instruksi teknis komputer.\n"
+            "3. Jika ditanya di luar konteks cabai (misal: resep masakan umum, politik, matematika, koding), "
+            "jawablah dengan: 'Maaf, saya hanya bisa membantu pertanyaan seputar kesehatan tanaman cabai.'\n"
+            "4. Jawab dalam bahasa Indonesia yang ramah dan profesional."
+        )
+
+        for index, model_name in enumerate(GEMINI_MODEL_NAMES):
+            try:
+                print(f"[debug] Sending chat request with Gemini model: {model_name}")
+                gemini_model = genai.GenerativeModel(
+                    model_name,
+                    system_instruction=system_instruction,
+                )
+                chat_session = gemini_model.start_chat(history=gemini_history)
+                response = chat_session.send_message(context_prompt)
+
+                if not response or not response.text:
+                    return ChatResponse(text="Maaf, saya tidak mendapatkan jawaban dari AI. Coba tanya lagi?")
+
+                return ChatResponse(text=response.text)
+            except Exception as exc:
+                has_next_model = index < len(GEMINI_MODEL_NAMES) - 1
+                if _is_gemini_quota_error(exc) and has_next_model:
+                    next_model = GEMINI_MODEL_NAMES[index + 1]
+                    print(f"[warn] Gemini model quota/rate limit hit: {model_name}. Trying fallback: {next_model}")
+                    continue
+                raise
 
     except Exception as exc:
+        if _is_gemini_quota_error(exc):
+            print(f"\n[warn] All Gemini models reached quota/rate limit: {exc}")
+            traceback.print_exc()
+            retry_seconds = _extract_retry_delay_seconds(str(exc))
+            retry_note = f" Coba akses Gemini lagi sekitar {retry_seconds} detik lagi." if retry_seconds else ""
+            return _offline_chat_response(
+                request,
+                f"Mode offline: semua model Gemini sedang terkena kuota atau rate limit.{retry_note} Jawaban berikut memakai data hasil diagnosis ChilliGuard.",
+            )
+
         print(f"\n[CRITICAL] Gemini API Error: {type(exc).__name__}: {exc}")
         traceback.print_exc()
-
-        error_msg = str(exc)
-        if "API_KEY_INVALID" in error_msg:
-            error_msg = "Kunci API Gemini tidak valid. Periksa file .env Anda."
-        elif "quota" in error_msg.lower():
-            error_msg = "Kuota API Gemini Anda habis."
-        else:
-            error_msg = f"AI service error: {type(exc).__name__}"
-
-        raise HTTPException(status_code=500, detail=error_msg)
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "AI_PROVIDER_ERROR",
+                "message": "Layanan AI sedang tidak dapat dihubungi. Silakan coba lagi nanti.",
+            },
+        )
 
 @app.get("/diseases", response_model=list[DiseaseInfo], tags=["Info"])
 async def list_diseases() -> list[DiseaseInfo]:
@@ -880,5 +1057,6 @@ def add_message(session_id: int, req: MessageCreate, db: Session = Depends(get_d
     return {"status": "ok", "id": new_msg.id}
 
 if __name__ == "__main__":
+    # pyrefly: ignore [missing-import]
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
