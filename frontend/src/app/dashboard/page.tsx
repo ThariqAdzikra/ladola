@@ -316,7 +316,7 @@ function HomeView({
 }
 
 export default function DashboardPage() {
-  const { data: session } = useSession(); const { theme } = useTheme();
+  const { data: session } = useSession(); const { theme, mounted } = useTheme();
   const [view, setView] = useState<View>("home"); // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [scanFile, setScanFile] = useState<File | null>(null);
   const [scanPreviewUrl, setScanPreviewUrl] = useState<string | null>(null); const [prediction, setPrediction] = useState<PredictionResult | null>(null);
