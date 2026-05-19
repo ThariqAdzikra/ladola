@@ -553,20 +553,23 @@ export default function DashboardPage() {
   const renderView = view;
 
   return (
-    <div className="relative flex h-[100dvh] w-full overflow-hidden transition-colors duration-300 font-inter text-foreground bg-background">
+    <div 
+      className="relative flex h-[100dvh] w-full overflow-hidden transition-colors duration-300 font-inter text-foreground bg-background"
+      style={{ visibility: mounted ? "visible" : "hidden" }}
+    >
       <div className="fixed inset-0 z-0 pointer-events-none">
-        <NextImage
- 
-          src={theme === "light" ? "/img/background.jpg" : "/img/darkbg.jpg"} 
-          alt="" 
-          fill 
-          sizes="100vw"
-          priority
-          className="object-cover transition-opacity duration-700" 
-        />
+        {mounted && (
+          <NextImage
+            src={theme === "light" ? "/img/background.jpg" : "/img/darkbg.jpg"}
+            alt=""
+            fill
+            sizes="100vw"
+            priority
+            className="object-cover transition-opacity duration-700"
+          />
+        )}
         <div className="absolute inset-0" style={{ background: theme === "light" ? "rgba(242, 246, 234, 0.4)" : "rgba(15, 23, 42, 0.6)" }} />
       </div>
-
       <AnimatePresence>
         {scanSidebarOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setScanSidebarOpen(false)} className="fixed inset-0 z-[140] bg-black/20 backdrop-blur-sm lg:hidden" />

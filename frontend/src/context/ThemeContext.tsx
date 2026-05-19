@@ -7,23 +7,27 @@ type Theme = "light" | "dark";
 
 interface ThemeContextType {
   theme: Theme;
+  mounted: boolean;
   toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window === "undefined") return "light";
-    const savedTheme = localStorage.getItem("theme") as Theme | null;
-    return savedTheme ?? "light";
-  });
+  const [theme, setTheme] = useState<Theme>("light");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    flushSync(() => {
-      setMounted(true);
-    });
+    // Initial check from localStorage or document class
+    const savedTheme = localStorage.getItem("theme") as Theme | null;
+    const isDark = savedTheme === "dark" || 
+                  (!savedTheme && document.documentElement.classList.contains("dark"));
+    
+    const initialTheme = isDark ? "dark" : "light";
+    setTheme(initialTheme);
+    document.documentElement.classList.toggle("dark", isDark);
+    
+    setMounted(true);
   }, []);
 
   const toggleTheme = () => {
@@ -34,8 +38,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      <div style={{ visibility: mounted ? "visible" : "hidden" }} className="contents">
+    <ThemeContext.Provider value={{ theme, mounted, toggleTheme }}>
+      <div 
+        className="contents" 
+        data-theme={mounted ? theme : undefined}
+      >
         {children}
       </div>
     </ThemeContext.Provider>

@@ -22,7 +22,7 @@ function TwinkleStar({ x, y, delay = 0 }: { x: string; y: string; delay?: number
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
-  const { theme } = useTheme();
+  const { theme, mounted } = useTheme();
 
   const signInWithGoogle = () => {
     setIsLoading(true);
@@ -32,19 +32,24 @@ export default function LoginPage() {
   return (
     <div
       className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 transition-colors duration-500"
-      style={{ fontFamily: "Inter, system-ui, sans-serif" }}
+      style={{ 
+        fontFamily: "Inter, system-ui, sans-serif",
+        visibility: mounted ? "visible" : "hidden" 
+      }}
     >
       {/* Background Image */}
       <div className="fixed inset-0 z-[-2] pointer-events-none">
-        <NextImage 
-          src={theme === "light" ? "/img/background.jpg" : "/img/darkbg.jpg"} 
-          alt="" 
-          fill 
-          sizes="100vw"
-          priority
-          className="object-cover transition-opacity duration-700" 
-          quality={90} 
-        />
+        {mounted && (
+          <NextImage 
+            src={theme === "light" ? "/img/background.jpg" : "/img/darkbg.jpg"} 
+            alt="" 
+            fill 
+            sizes="100vw"
+            priority
+            className="object-cover transition-opacity duration-700" 
+            quality={90} 
+          />
+        )}
         {/* Tint overlay */}
         <div 
           className="absolute inset-0 z-[-1] transition-colors duration-500"
