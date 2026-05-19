@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+backend/venv/
+
+# Environment files
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env.local
+
+# Node / Next.js
+node_modules/
+frontend/node_modules/
+.next/
+frontend/.next/
+out/
+frontend/out/
+build/
+frontend/build/
+*.tsbuildinfo
+
+# Tooling / OS
+.DS_Store
+.vscode/
+*.log
+*.tmp
+
+# Training data should not be uploaded into deployment images by default.
+Dataset/

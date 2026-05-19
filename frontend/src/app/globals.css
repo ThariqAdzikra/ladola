@@ -1,0 +1,293 @@
+/* ─── ChilliGuard · Cozy Stardew Palette ─── */
+@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Inter:ital,opsz,wght@0,14..32,300..700;1,14..32,300..700&display=swap');
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  /* Greens */
+  --color-primary-50:  #f3f9ec;
+  --color-primary-100: #e2f2d0;
+  --color-primary-200: #c3e4a0;
+  --color-primary-300: #9dd16b;
+  --color-primary-400: #7cbd40;
+  --color-primary-500: #5b9e2a;
+  --color-primary-600: #4a7f21;
+  --color-primary-700: #3a6219;
+  --color-primary-800: #2c4b13;
+  --color-primary-900: #1e340d;
+  --color-primary-950: #111d07;
+
+  /* Warm tones */
+  --color-warm-50:  #fdfaf4;
+  --color-warm-100: #f7f0e0;
+  --color-warm-200: #ecdfc0;
+  --color-warm-300: #dbc896;
+  --color-warm-400: #c9ad6c;
+  --color-warm-500: #b5924a;
+  --color-warm-600: #8b6e37;
+  --color-warm-700: #6b5229;
+  --color-warm-800: #4e3b1e;
+  --color-warm-900: #342714;
+  --color-warm-950: #1c150a;
+
+  /* Semantic */
+  --color-background:    #f8f5ef;
+  --color-foreground:    #2d2118;
+  --color-surface:       #ffffff;
+  --color-surface-warm:  #fdfaf4;
+  --color-border:        rgba(107, 82, 41, 0.15);
+  --color-border-strong: rgba(107, 82, 41, 0.35);
+
+  /* Pixel accents */
+  --color-pixel-green:  #5b9e2a;
+  --color-pixel-brown:  #6b5229;
+  --color-pixel-gold:   #c9a227;
+  --color-pixel-sky:    #a8d8ea;
+  --color-pixel-cream:  #f5edd8;
+}
+
+/* ─── Dark Mode Overrides ─── */
+:root.dark {
+  --color-background:    #0f172a;
+  --color-foreground:    #f8fafc;
+  --color-surface:       #1e293b;
+  --color-surface-warm:  #1e293b;
+  --color-border:        rgba(255, 255, 255, 0.1);
+  --color-border-strong: rgba(255, 255, 255, 0.2);
+
+  /* Adjust primary for dark mode visibility */
+  --color-primary-50:  #111d07;
+  --color-primary-100: #1e340d;
+  --color-primary-200: #2c4b13;
+  --color-primary-300: #3a6219;
+  --color-primary-400: #4a7f21;
+  --color-primary-500: #5b9e2a;
+  --color-primary-600: #7cbd40;
+  --color-primary-700: #9dd16b;
+  --color-primary-800: #c3e4a0;
+  --color-primary-900: #e2f2d0;
+  --color-primary-950: #f3f9ec;
+}
+
+/* ─── Base ─── */
+html, body { min-height: 100%; scroll-behavior: smooth; }
+
+html {
+  background-color: var(--color-background);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Pixel Font (accent only) ─── */
+.font-pixel {
+  font-family: 'Pixelify Sans', cursive;
+  letter-spacing: 0.03em;
+}
+
+::selection {
+  background-color: #c3e4a0;
+  color: #1e340d;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(107, 82, 41, 0.2);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 82, 41, 0.35);
+}
+
+/* ─── Subtle pixel grid ─── */
+.cg-pixel-grid {
+  background-image:
+    linear-gradient(90deg, rgba(107, 82, 41, 0.04) 1px, transparent 1px),
+    linear-gradient(0deg,  rgba(107, 82, 41, 0.04) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* ─── Cozy card (Soft & Elegant) ─── */
+.cg-cozy-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.cg-cozy-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-primary-500);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+.cg-cozy-card:active {
+  transform: translateY(0);
+}
+
+/* ─── Pixel accent card ─── */
+.cg-pixel-card {
+  background: var(--color-surface);
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+}
+.cg-pixel-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* ─── NPC chat bubble (warm parchment) ─── */
+.cg-npc-bubble {
+  background: var(--color-surface-warm);
+  border: 1.5px solid var(--color-border);
+  border-radius: 4px 16px 16px 16px;
+  color: var(--color-foreground);
+  font-family: 'Inter', sans-serif;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+}
+
+:root.dark .cg-npc-bubble {
+  background: #1e293b;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ─── User chat bubble (soft sky) ─── */
+.cg-user-bubble {
+  background: #eaf5fb;
+  border: 1.5px solid rgba(100, 180, 220, 0.3);
+  border-radius: 16px 4px 16px 16px;
+  color: #1a3a4a;
+  font-family: 'Inter', sans-serif;
+  box-shadow: 0 1px 6px rgba(100, 180, 220, 0.12);
+}
+
+:root.dark .cg-user-bubble {
+  background: #0f172a;
+  border-color: rgba(100, 180, 220, 0.4);
+  color: #f1f5f9;
+}
+
+/* ─── Elegant retro button ─── */
+.cg-retro-btn {
+  font-family: 'Pixelify Sans', cursive;
+  border-radius: 8px;
+  border: 1.5px solid rgba(107, 82, 41, 0.25);
+  box-shadow: 0 2px 0 rgba(107, 82, 41, 0.15);
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.cg-retro-btn:hover {
+  background: #c9a227 !important;
+  color: #2d2118 !important;
+  border-color: rgba(107, 82, 41, 0.4) !important;
+  box-shadow: 0 1px 0 rgba(107, 82, 41, 0.2);
+  transform: translateY(1px);
+}
+.cg-retro-btn:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+/* ─── Float animation ─── */
+@keyframes cg-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-5px); }
+}
+.cg-float { animation: cg-float 3.5s ease-in-out infinite; }
+
+/* ─── Glow pulse ─── */
+@keyframes cg-glow-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1; transform: scale(1.1); }
+}
+.cg-glow-pulse { animation: cg-glow-pulse 2.5s ease-in-out infinite; }
+
+/* ─── Typing dots ─── */
+@keyframes cg-typing-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+  30%            { transform: translateY(-4px); opacity: 1; }
+}
+.cg-typing-dot { animation: cg-typing-dot 1.4s ease-in-out infinite; }
+.cg-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.cg-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* ─── Confidence bar ─── */
+@keyframes cg-fill-bar { from { width: 0%; } }
+.cg-fill-bar { animation: cg-fill-bar 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+
+/* ─── Scan line ─── */
+@keyframes cg-scan-line {
+  0%   { top: 0%; }
+  50%  { top: 100%; }
+  100% { top: 0%; }
+}
+.cg-scan-line {
+  position: absolute; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, #7cbd40, transparent);
+  animation: cg-scan-line 3s ease-in-out infinite;
+}
+
+/* ─── Shimmer ─── */
+@keyframes cg-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.cg-shimmer {
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0) 100%);
+  background-size: 200% 100%;
+  animation: cg-shimmer 2s ease-in-out infinite;
+}
+
+/* ─── Gradient text ─── */
+.cg-gradient-text {
+  background: linear-gradient(135deg, #5b9e2a 0%, #7cbd40 60%, #a8c850 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Prose ─── */
+.cg-prose { line-height: 1.75; }
+.cg-prose p { margin-bottom: 0.75em; }
+.cg-prose p:last-child { margin-bottom: 0; }
+.cg-prose strong { font-weight: 600; color: #2d2118; }
+.cg-prose ul { list-style-type: disc; padding-left: 1.5em; margin: 0.5em 0; }
+.cg-prose li { margin-bottom: 0.25em; }
+
+.prose-npc {
+  --tw-prose-body: #2d2118;
+  --tw-prose-headings: #2d2118;
+  --tw-prose-links: #5b9e2a;
+  --tw-prose-bold: #2d2118;
+  --tw-prose-bullets: #8b6e37;
+  --tw-prose-quote-borders: #dbc896;
+}
+
+.prose-user {
+  --tw-prose-body: #1a3a4a;
+  --tw-prose-headings: #1a3a4a;
+  --tw-prose-links: #2a90b8;
+  --tw-prose-bold: #1a3a4a;
+  --tw-prose-bullets: #64b4dc;
+  --tw-prose-quote-borders: #a8d8ea;
+}
+
+/* ─── Dot grid (very subtle) ─── */
+.cg-dot-grid {
+  background-image: radial-gradient(circle at 1px 1px, rgba(107, 82, 41, 0.07) 1px, transparent 0);
+  background-size: 22px 22px;
+}
+
+/* ─── Warm twinkling stars ─── */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.3; transform: scale(0.9); }
+  50%       { opacity: 0.8; transform: scale(1.1); }
+}
+.cg-star { animation: twinkle 2.5s ease-in-out infinite; }

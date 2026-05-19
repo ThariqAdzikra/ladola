@@ -85,7 +85,6 @@ def _parse_gemini_models(primary: str, fallbacks: str | None) -> list[str]:
 
 MODEL_PATH = _env_path("MODEL_PATH", DEFAULT_MODEL_DIR / "chilliscan_cnn.pth")
 CLASS_NAMES_PATH = _env_path("CLASS_NAMES_PATH", DEFAULT_MODEL_DIR / "class_names.json")
-DATASET_DIR = _env_path("DATASET_DIR", REPO_ROOT / "Dataset")
 ALLOWED_ORIGINS = _parse_origins(os.getenv("ALLOWED_ORIGINS"))
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "10")) * 1024 * 1024
 GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
@@ -458,20 +457,12 @@ def _infer_num_classes(state_dict: dict[str, torch.Tensor]) -> int:
     return int(classifier_weight.shape[0])
 
 
-def _default_raw_class_names() -> list[str]:
-    if DATASET_DIR.exists():
-        folders = sorted(path.name for path in DATASET_DIR.iterdir() if path.is_dir())
-        if folders:
-            return folders
-    return sorted(CLASS_DISPLAY_NAMES)
-
-
 def _build_fallback_class_info(expected_num_classes: int | None = None) -> dict[str, Any]:
-    class_names_raw = _default_raw_class_names()
+    class_names_raw = sorted(CLASS_DISPLAY_NAMES)
     class_names = [CLASS_DISPLAY_NAMES.get(name, name) for name in class_names_raw]
     if expected_num_classes is not None and len(class_names) != expected_num_classes:
         raise RuntimeError(
-            "Model output classes do not match dataset metadata. "
+            "Model output classes do not match fallback metadata. "
             f"Expected {expected_num_classes}, found {len(class_names)}."
         )
     metadata = {
@@ -1059,4 +1050,9 @@ def add_message(session_id: int, req: MessageCreate, db: Session = Depends(get_d
 if __name__ == "__main__":
     # pyrefly: ignore [missing-import]
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", "8000")),
+        reload=os.getenv("APP_ENV") != "production",
+    )

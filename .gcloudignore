@@ -1,0 +1,22 @@
+.gcloudignore
+.git
+.gitignore
+Dataset/
+node_modules/
+backend/venv/
+backend/__pycache__/
+frontend/.next/
+frontend/node_modules/
+.venv/
+.vscode/
+.cursor/
+.agents/
+.claude/
+# Model files (needed)
+!backend/model/chilliscan_cnn.pth
+*.db
+*.sqlite
+.env
+backend/.env
+frontend/.env
+*.log
