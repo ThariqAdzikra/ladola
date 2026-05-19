@@ -21,7 +21,7 @@ import {
 import { motion, AnimatePresence, useScroll, useTransform, useSpring } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "@/context/ThemeContext";
-import Image from "next/image";
+import NextImage from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -148,7 +148,8 @@ function HomeView({
         >
           <div className="cg-float relative mb-8">
             <div className="relative h-40 w-40 md:h-48 md:w-48 mx-auto pixelated">
-              <Image 
+              <NextImage
+ 
                 src="/img/logo.png" 
                 alt="ChilliGuard" 
                 fill 
@@ -196,7 +197,7 @@ function HomeView({
               className="relative z-10 flex flex-col items-center p-8 text-center rounded-[2rem] border-2 drop-shadow-sm flex-1 transition-all" style={{ backgroundColor: theme === "light" ? "rgba(255,255,255,0.8)" : "rgba(30,41,59,0.8)", borderColor: theme === "light" ? "white" : "rgba(51,65,85,1)", backdropFilter: "blur(12px)" }}
             >
               <div className="absolute -top-4 -right-4 w-10 h-10 rounded-full flex items-center justify-center text-white font-pixel text-lg bg-[#5b9e2a] border-2 border-white shadow-md">{i + 1}</div>
-              <div className="relative h-20 w-20 mb-6 pixelated"><Image src={step.icon} alt={step.title} fill sizes="80px" className="object-contain" /></div>
+              <div className="relative h-20 w-20 mb-6 pixelated"><NextImage src={step.icon} alt={step.title} fill sizes="80px" className="object-contain" /></div>
               <h3 className="font-pixel text-xl tracking-wide mb-3" style={{ color: theme === "light" ? "#3a6219" : "#7cbd40" }}>{step.title.replace(/^\d+\.\s*/, '')}</h3>
               <p className="text-sm leading-relaxed" style={{ opacity: theme === "light" ? 0.8 : 0.9, fontFamily: "Inter, sans-serif", color: theme === "light" ? "#2d2118" : "#cbd5e1" }}>{step.desc}</p>
             </motion.div>
@@ -285,7 +286,8 @@ function HomeView({
           <h2 className="font-pixel text-3xl md:text-5xl tracking-wider mb-12" style={{ color: theme === "light" ? "#2d2118" : "#f8fafc" }}>KREATOR</h2>
           <div className="cg-cozy-card p-10 flex flex-col items-center max-w-md w-full transition-colors duration-300 shadow-xl bg-white dark:bg-slate-800 rounded-3xl border">
             <div className="relative h-24 w-24 rounded-full overflow-hidden mb-6 border-4" style={{ borderColor: theme === "light" ? "rgba(91, 158, 42, 0.2)" : "rgba(255, 255, 255, 0.1)" }}>
-              <Image 
+              <NextImage
+ 
                 src="/img/iconchatbot.png" 
                 alt="Creator" 
                 fill 
@@ -553,7 +555,8 @@ export default function DashboardPage() {
   return (
     <div className="relative flex h-[100dvh] w-full overflow-hidden transition-colors duration-300 font-inter text-foreground bg-background">
       <div className="fixed inset-0 z-0 pointer-events-none">
-        <Image 
+        <NextImage
+ 
           src={theme === "light" ? "/img/background.jpg" : "/img/darkbg.jpg"} 
           alt="" 
           fill 
@@ -579,7 +582,7 @@ export default function DashboardPage() {
       >
         <div className="flex flex-col h-full w-72 shrink-0">
           <div className="flex h-14 shrink-0 items-center justify-between px-5 border-b" style={{ borderColor: theme === "light" ? "rgba(107, 82, 41, 0.08)" : "rgba(255, 255, 255, 0.05)" }}>
-            <div className="flex items-center gap-3"><div className="relative h-7 w-7 pixelated"><Image src="/img/logo.png" alt="" fill sizes="28px" priority className="object-contain" /></div><span className="font-pixel text-[13px]" style={{ color: theme === "light" ? "#3a6219" : "#7cbd40" }}>CHILLIGUARD</span></div>
+            <div className="flex items-center gap-3"><div className="relative h-7 w-7 pixelated"><NextImage src="/img/logo.png" alt="" fill sizes="28px" priority className="object-contain" /></div><span className="font-pixel text-[13px]" style={{ color: theme === "light" ? "#3a6219" : "#7cbd40" }}>CHILLIGUARD</span></div>
             <button onClick={() => setScanSidebarOpen(false)} className="lg:hidden transition-colors hover:opacity-70"><X className="h-5 w-5" /></button>
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-4 font-inter">
@@ -613,7 +616,8 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2.5 p-2 rounded-lg bg-black/5 transition-colors">
               <div className="h-8 w-8 rounded-lg overflow-hidden flex items-center justify-center font-bold text-xs bg-primary-100 text-primary-700 relative">
                 {session?.user?.image ? (
-                  <Image src={session.user.image} alt="" className="object-cover" referrerPolicy="no-referrer" fill sizes="32px" />
+                  <NextImage
+ src={session.user.image} alt="" className="object-cover" referrerPolicy="no-referrer" fill sizes="32px" />
                 ) : (
                   (session?.user?.name?.[0] || "U").toUpperCase()
                 )}
@@ -679,13 +683,15 @@ export default function DashboardPage() {
                            <div className={`h-8 w-8 md:h-10 md:w-10 shrink-0 overflow-hidden flex items-center justify-center rounded-xl shadow-sm transition-all border relative ${m.role === "user" ? "bg-primary-500 text-white border-primary-600" : ""}`} style={m.role !== "user" ? { backgroundColor: theme === "light" ? "white" : "#1e293b", borderColor: theme === "light" ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.1)" } : {}}>
                              {m.role === "user" ? (
                                session?.user?.image ? (
-                                 <Image src={session.user.image} alt="" className="object-cover" referrerPolicy="no-referrer" fill sizes="40px" />
+                                 <NextImage
+ src={session.user.image} alt="" className="object-cover" referrerPolicy="no-referrer" fill sizes="40px" />
                                ) : (
                                  <User className="w-4 h-4" />
                                )
                              ) : (
                                <div className="relative h-6 w-6 md:h-7 md:w-7 pixelated">
-                                 <Image src="/img/iconchatbot.png" alt="AI" fill sizes="28px" />
+                                 <NextImage
+ src="/img/iconchatbot.png" alt="AI" fill sizes="28px" />
                                </div>
                              )}
                            </div>
@@ -697,7 +703,8 @@ export default function DashboardPage() {
                                    <div className="flex flex-col md:flex-row">
                                       {m.image && (
                                         <div className="relative w-full md:w-64 h-44 md:h-auto shrink-0 border-b md:border-b-0 md:border-r transition-colors" style={{ backgroundColor: theme === "light" ? "#f1f5f9" : "#0f172a", borderColor: theme === "light" ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)" }}>
-                                          <Image src={m.image} alt="" className="object-cover" fill sizes="(max-width: 768px) 100vw, 256px" />
+                                          <NextImage
+ src={m.image} alt="" className="object-cover" fill sizes="(max-width: 768px) 100vw, 256px" />
                                         </div>
                                       )}
                                       <div className="flex-1 p-4 md:p-5 flex flex-col" style={{ backgroundColor: theme === "light" ? "white" : "#1e293b" }}>
@@ -773,7 +780,8 @@ export default function DashboardPage() {
                       >
                         <div className="h-8 w-8 md:h-10 md:w-10 shrink-0 flex items-center justify-center rounded-xl shadow-sm border transition-all" style={{ backgroundColor: theme === "light" ? "white" : "#1e293b", borderColor: theme === "light" ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)" }}>
                           <div className="relative h-6 w-6 md:h-7 md:w-7 pixelated animate-pulse">
-                            <Image src="/img/iconchatbot.png" alt="AI" fill sizes="28px" />
+                            <NextImage
+ src="/img/iconchatbot.png" alt="AI" fill sizes="28px" />
                           </div>
                         </div>
                         <div className="px-4 py-3 rounded-2xl rounded-tl-none border shadow-sm transition-all flex items-center gap-1.5" style={{ backgroundColor: theme === "light" ? "white" : "#1e293b", borderColor: theme === "light" ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)" }}>
@@ -877,7 +885,8 @@ export default function DashboardPage() {
               <div className="relative group">
                 {scanPreviewUrl && (
                   <div className="relative w-48 h-48 md:w-56 md:h-56 mb-10 rounded-3xl overflow-hidden shadow-xl border-2" style={{ borderColor: theme === "light" ? "white" : "rgba(255,255,255,0.1)" }}>
-                    <Image src={scanPreviewUrl} alt="Analyzing" className="object-cover grayscale-[0.3] scale-105" fill sizes="224px" />
+                    <NextImage
+ src={scanPreviewUrl} alt="Analyzing" className="object-cover grayscale-[0.3] scale-105" fill sizes="224px" />
                     <div className="absolute inset-0 bg-primary-500/5 backdrop-brightness-90" />
                   </div>
                 )}

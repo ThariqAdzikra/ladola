@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { signIn } from "next-auth/react";
-import Image from "next/image";
+import NextImage from "next/image";
 import { useTheme } from "@/context/ThemeContext";
 
 function TwinkleStar({ x, y, delay = 0 }: { x: string; y: string; delay?: number }) {
@@ -36,7 +36,7 @@ export default function LoginPage() {
     >
       {/* Background Image */}
       <div className="fixed inset-0 z-[-2] pointer-events-none">
-        <Image 
+        <NextImage 
           src={theme === "light" ? "/img/background.jpg" : "/img/darkbg.jpg"} 
           alt="" 
           fill 
@@ -91,7 +91,7 @@ export default function LoginPage() {
               className="cg-float relative h-20 w-20 md:h-28 md:w-28 overflow-hidden mb-3 mx-auto"
               style={{ imageRendering: "pixelated" }}
             >
-              <Image 
+              <NextImage 
                 src="/img/logo.png" 
                 alt="ChilliGuard" 
                 fill 
