@@ -86,7 +86,7 @@ async function resizeAndBase64(file: File, maxWidth = 600): Promise<string> {
     reader.readAsDataURL(file);
     reader.onload = (e) => {
       const b64 = e.target?.result as string;
-      const img = new Image();
+      const img = document.createElement("img");
       img.onerror = () => resolve(b64); // Fallback to original if load fails
       img.src = b64;
       img.onload = () => {
