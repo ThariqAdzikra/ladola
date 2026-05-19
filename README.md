@@ -79,10 +79,11 @@ Production deployment uses a single root `Dockerfile`. The container packages bo
 Set these in the Cloud Run service configuration:
 
 - `APP_ENV`: `production`
-- `ALLOWED_ORIGINS`: `https://YOUR_CLOUD_RUN_URL`
+- `ALLOWED_ORIGINS`: `https://chilliguard.dpdns.org`
 - `DATABASE_URL`: (Use Neon or Cloud SQL URL)
 - `GOOGLE_API_KEY`: (Your Gemini API Key)
-- `NEXTAUTH_URL`: `https://YOUR_CLOUD_RUN_URL`
+- `NEXTAUTH_URL`: `https://chilliguard.dpdns.org`
 - `NEXTAUTH_SECRET`: (Random string)
 - `GOOGLE_CLIENT_ID`: (For Google Auth)
 - `GOOGLE_CLIENT_SECRET`: (For Google Auth)
+- `NEXT_PUBLIC_API_URL`: `https://chilliguard.dpdns.org`
