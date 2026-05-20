@@ -76,14 +76,47 @@ Production deployment uses a single root `Dockerfile`. The container packages bo
 
 ### Required Environment Variables
 
-Set these in the Cloud Run service configuration:
+Set these in the Cloud Run service configuration (**Variables & secrets → Environment variables**).
 
-- `APP_ENV`: `production`
-- `ALLOWED_ORIGINS`: `https://chilliguard.dpdns.org`
-- `DATABASE_URL`: (Use Neon or Cloud SQL URL)
-- `GOOGLE_API_KEY`: (Your Gemini API Key)
-- `NEXTAUTH_URL`: `https://chilliguard.dpdns.org`
-- `NEXTAUTH_SECRET`: (Random string)
-- `GOOGLE_CLIENT_ID`: (For Google Auth)
-- `GOOGLE_CLIENT_SECRET`: (For Google Auth)
-- `NEXT_PUBLIC_API_URL`: `https://chilliguard.dpdns.org`
+You can copy-paste the block below and replace the values that are marked with `<>`:
+
+```env
+# App/runtime
+APP_ENV=production
+
+# CORS for backend (comma-separated allowed origins)
+ALLOWED_ORIGINS=https://chilliguard.dpdns.org
+
+# Database
+DATABASE_URL=<your_postgres_url>
+
+# Gemini / Generative AI (backend reads GEMINI_API_KEY or GOOGLE_API_KEY)
+GEMINI_API_KEY=<your_gemini_api_key>
+# (optional alternative name)
+# GOOGLE_API_KEY=<your_gemini_api_key>
+GEMINI_MODEL=gemini-3.1-flash-lite
+GEMINI_FALLBACK_MODELS=gemini-2.5-flash
+
+# NextAuth (frontend)
+NEXTAUTH_URL=https://chilliguard.dpdns.org
+NEXTAUTH_SECRET=<your_random_long_secret>
+GOOGLE_CLIENT_ID=<your_google_oauth_client_id>
+GOOGLE_CLIENT_SECRET=<your_google_oauth_client_secret>
+
+# Frontend → backend (server-side calls from Next.js route handlers)
+# In this single-container deployment, the backend is available on localhost:8000.
+BACKEND_API_URL=http://127.0.0.1:8000
+
+# Browser → API base URL used by the UI (points to the public Cloud Run URL)
+NEXT_PUBLIC_API_URL=https://chilliguard.dpdns.org
+
+# Model paths inside the container (optional; defaults already work)
+MODEL_PATH=./model/chilliscan_cnn.pth
+CLASS_NAMES_PATH=./model/class_names.json
+MAX_UPLOAD_MB=10
+```
+
+Notes:
+- Do **not** duplicate keys (e.g. only one `DATABASE_URL`).
+- For Google OAuth, the redirect URI must be `https://chilliguard.dpdns.org/api/auth/callback/google` (adjust domain if different).
+- If you accidentally exposed any secrets, rotate them (DB password, Gemini key, NextAuth secret, Google client secret).
