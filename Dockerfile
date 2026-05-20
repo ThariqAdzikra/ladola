@@ -46,6 +46,7 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         bash \
+        curl \
         nginx \
         libglib2.0-0 \
         libgl1 \

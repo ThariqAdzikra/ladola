@@ -56,6 +56,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+/** Safely parse JSON from a fetch Response — avoids SyntaxError when the server
+ *  returns an HTML error page (e.g. nginx 502). */
+async function safeJson<T = unknown>(res: Response): Promise<T> {
+  const ct = res.headers.get("content-type") ?? "";
+  if (!ct.includes("application/json")) {
+    const text = await res.text().catch(() => "");
+    throw new Error(
+      `Server returned HTTP ${res.status} (${res.statusText || "error"}) — expected JSON but got: ${text.slice(0, 120)}`
+    );
+  }
+  return res.json() as Promise<T>;
+}
+
 function getChatErrorMessage(errorData: unknown, status: number) {
   const detail = isRecord(errorData) ? errorData.detail : undefined;
   const detailRecord = isRecord(detail) ? detail : undefined;
@@ -361,7 +374,12 @@ export default function DashboardPage() {
       });
       clearTimeout(tid);
 
-      const data = await res.json(); 
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        throw new Error(`Prediction failed: HTTP ${res.status} — ${errText.slice(0, 120)}`);
+      }
+
+      const data = await safeJson<PredictionResult>(res);
 
       const elapsed = Date.now() - startTime;
       if (elapsed < 2000) await new Promise(r => setTimeout(r, 2000 - elapsed));
@@ -426,7 +444,10 @@ export default function DashboardPage() {
       if (session?.user?.email) {
         try {
           const res = await fetch(`${API_BASE}/api/chat-sessions?email=${encodeURIComponent(session.user.email)}`);
-          if (res.ok) setSidebarSessions(await res.json());
+          if (res.ok) {
+            const ct = res.headers.get("content-type") ?? "";
+            if (ct.includes("application/json")) setSidebarSessions(await res.json());
+          }
         } catch (e) { console.error("Sync error:", e); }
       }
     }
@@ -512,11 +533,12 @@ export default function DashboardPage() {
       });
       
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
+        const ct = res.headers.get("content-type") ?? "";
+        const errorData = ct.includes("application/json") ? await res.json().catch(() => ({})) : {};
         throw new Error(getChatErrorMessage(errorData, res.status));
       }
       
-      const data = await res.json();
+      const data = await safeJson<{ text: string }>(res);
       const aiMsg: ChatMessage = { id: generateMessageId("ai"), role: "assistant", text: data.text };
       setMessages(prev => [...prev, aiMsg]);
       

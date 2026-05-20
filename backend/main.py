@@ -87,7 +87,7 @@ MODEL_PATH = _env_path("MODEL_PATH", DEFAULT_MODEL_DIR / "chilliscan_cnn.pth")
 CLASS_NAMES_PATH = _env_path("CLASS_NAMES_PATH", DEFAULT_MODEL_DIR / "class_names.json")
 ALLOWED_ORIGINS = _parse_origins(os.getenv("ALLOWED_ORIGINS"))
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "10")) * 1024 * 1024
-GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
 GEMINI_MODEL_NAMES = _parse_gemini_models(
     GEMINI_MODEL_NAME,
     os.getenv("GEMINI_FALLBACK_MODELS", "gemini-2.5-flash"),
