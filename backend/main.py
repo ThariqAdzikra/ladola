@@ -39,7 +39,7 @@ import google.generativeai as genai
 from sqlalchemy.orm import Session
 
 # Local imports
-from database import get_db, engine
+from database import Base, database_url_safe, engine, engine_error, get_db
 from models import User, Scan, ChatSession, Message
 
 
@@ -111,6 +111,13 @@ async def lifespan(app: FastAPI):
         load_model()
     except Exception as exc:
         print(f"[critical] Failed to load model during startup: {exc}")
+
+    if engine is not None:
+        try:
+            Base.metadata.create_all(bind=engine)
+            print("[info] Database tables ensured")
+        except Exception as exc:
+            print(f"[critical] Failed to initialize database schema: {exc}")
     yield
     print("[info] Shutting down ChilliGuard API")
 
@@ -656,6 +663,8 @@ async def root() -> dict[str, Any]:
         "service": "ChilliGuard API",
         "model_loaded": model is not None,
         "model_error": model_load_error,
+        "database_ready": engine is not None,
+        "database_error": engine_error,
         "num_classes": class_info["num_classes"] if class_info else 0,
         "metadata_source": metadata_source,
     }
@@ -667,6 +676,9 @@ async def health() -> dict[str, Any]:
         "status": "healthy",
         "model_loaded": model is not None,
         "model_error": model_load_error,
+        "database_ready": engine is not None,
+        "database_url": database_url_safe,
+        "database_error": engine_error,
         "model_path": str(MODEL_PATH),
         "class_info_path": str(CLASS_NAMES_PATH),
         "num_classes": class_info["num_classes"] if class_info else 0,
