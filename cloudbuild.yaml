@@ -1,0 +1,21 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "asia-east1-docker.pkg.dev/$PROJECT_ID/chilliguard/chilliguard:$SHORT_SHA", "."]
+
+  - name: gcr.io/cloud-builders/docker
+    args: ["push", "asia-east1-docker.pkg.dev/$PROJECT_ID/chilliguard/chilliguard:$SHORT_SHA"]
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - chilliguard
+      - --image=asia-east1-docker.pkg.dev/$PROJECT_ID/chilliguard/chilliguard:$SHORT_SHA
+      - --region=asia-east1
+      - --platform=managed
+      - --allow-unauthenticated
+      - --memory=2Gi
+      - --port=8080
+images:
+  - asia-east1-docker.pkg.dev/$PROJECT_ID/chilliguard/chilliguard:$SHORT_SHA
