@@ -40,24 +40,19 @@ export default function LoginPage() {
       {/* Background Image */}
       <div className="fixed inset-0 z-[-2] pointer-events-none">
         {mounted && (
-          <NextImage 
-            src={theme === "light" ? "/img/background.jpg" : "/img/darkbg.jpg"} 
-            alt="" 
-            fill 
-            sizes="100vw"
-            priority
-            className="object-cover transition-opacity duration-700" 
-            quality={90} 
+          <div
+            className="absolute inset-0 bg-cover bg-center transition-opacity duration-700"
+            style={{ backgroundImage: `url(${theme === "light" ? "/img/background.jpg" : "/img/darkbg.jpg"})` }}
           />
         )}
         {/* Tint overlay */}
         <div 
           className="absolute inset-0 z-[-1] transition-colors duration-500"
-          style={{ background: theme === "light" ? "rgba(240, 244, 232, 0.15)" : "rgba(15, 23, 42, 0.4)" }}
+          style={{ background: theme === "light" ? "rgba(240, 244, 232, 0.12)" : "rgba(15, 23, 42, 0.28)" }}
         />
       </div>
       {/* Very subtle pixel grid */}
-      <div className="cg-pixel-grid pointer-events-none absolute inset-0 opacity-20 z-0" />
+      <div className="cg-pixel-grid pointer-events-none absolute inset-0 opacity-15 z-0" />
 
       {/* Twinkling stars */}
       <TwinkleStar x="8%" y="15%" delay={0} />
