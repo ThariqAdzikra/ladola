@@ -31,26 +31,18 @@ export default function LoginPage() {
 
   return (
     <div
-      className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 transition-colors duration-500"
+      className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 transition-colors duration-500 bg-cover bg-center"
       style={{ 
         fontFamily: "Inter, system-ui, sans-serif",
-        visibility: mounted ? "visible" : "hidden" 
+        visibility: mounted ? "visible" : "hidden",
+        backgroundImage: mounted ? `url(${theme === "light" ? "/img/background.jpg" : "/img/darkbg.jpg"})` : undefined,
       }}
     >
-      {/* Background Image */}
-      <div className="fixed inset-0 z-[-2] pointer-events-none">
-        {mounted && (
-          <div
-            className="absolute inset-0 bg-cover bg-center transition-opacity duration-700"
-            style={{ backgroundImage: `url(${theme === "light" ? "/img/background.jpg" : "/img/darkbg.jpg"})` }}
-          />
-        )}
-        {/* Tint overlay */}
-        <div 
-          className="absolute inset-0 z-[-1] transition-colors duration-500"
-          style={{ background: theme === "light" ? "rgba(240, 244, 232, 0.12)" : "rgba(15, 23, 42, 0.28)" }}
-        />
-      </div>
+      {/* Tint overlay */}
+      <div
+        className="pointer-events-none absolute inset-0 z-0 transition-colors duration-500"
+        style={{ background: theme === "light" ? "rgba(240, 244, 232, 0.12)" : "rgba(15, 23, 42, 0.28)" }}
+      />
       {/* Very subtle pixel grid */}
       <div className="cg-pixel-grid pointer-events-none absolute inset-0 opacity-15 z-0" />
 
