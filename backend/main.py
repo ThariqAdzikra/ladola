@@ -10,6 +10,7 @@ import io
 import json
 import os
 import re
+import asyncio
 import time
 import traceback
 from pathlib import Path
@@ -529,6 +530,26 @@ def _is_gemini_quota_error(exc: Exception) -> bool:
     )
 
 
+def _is_gemini_busy_error(exc: Exception) -> bool:
+    error_text = f"{type(exc).__name__}: {exc}".lower()
+    return any(
+        token in error_text
+        for token in (
+            "503",
+            "service unavailable",
+            "unavailable",
+            "overloaded",
+            "high demand",
+            "temporarily",
+            "try again later",
+            "deadline exceeded",
+            "timeout",
+            "timed out",
+            "internal error",
+        )
+    )
+
+
 def _extract_retry_delay_seconds(error_text: str) -> int | None:
     retry_match = re.search(r"retry in\s+([\d.]+)s", error_text, re.IGNORECASE)
     if retry_match:
@@ -838,9 +859,24 @@ async def chat(request: ChatRequest) -> ChatResponse:
                     next_model = GEMINI_MODEL_NAMES[index + 1]
                     print(f"[warn] Gemini model quota/rate limit hit: {model_name}. Trying fallback: {next_model}")
                     continue
+                if _is_gemini_busy_error(exc):
+                    if has_next_model:
+                        next_model = GEMINI_MODEL_NAMES[index + 1]
+                        print(f"[warn] Gemini model busy/unavailable: {model_name}. Trying fallback: {next_model}")
+                        await asyncio.sleep(1.0)
+                        continue
+                    raise HTTPException(
+                        status_code=503,
+                        detail={
+                            "code": "AI_BUSY",
+                            "message": "Model AI sedang sibuk/overload. Silakan coba lagi dalam beberapa menit.",
+                        },
+                    )
                 raise
 
     except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise
         if _is_gemini_quota_error(exc):
             print(f"\n[warn] All Gemini models reached quota/rate limit: {exc}")
             traceback.print_exc()
@@ -1042,6 +1078,25 @@ def get_session(session_id: int, db: Session = Depends(get_db)):
         "title": target_session.title,
         "messages": formatted_messages
     }
+
+
+@app.delete("/api/chat-sessions/{session_id}", tags=["History"])
+def delete_session(session_id: int, email: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User with email {email} not found")
+
+    target_session = (
+        db.query(ChatSession)
+        .filter(ChatSession.id == session_id, ChatSession.user_id == user.id)
+        .first()
+    )
+    if not target_session:
+        raise HTTPException(status_code=404, detail=f"Chat session with ID {session_id} not found")
+
+    db.delete(target_session)
+    db.commit()
+    return {"status": "ok"}
 
 @app.post("/api/chat-sessions/{session_id}/messages", tags=["History"])
 def add_message(session_id: int, req: MessageCreate, db: Session = Depends(get_db)):

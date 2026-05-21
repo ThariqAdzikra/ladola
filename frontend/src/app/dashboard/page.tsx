@@ -17,6 +17,7 @@ import {
   MessageSquare,
   LogOut,
   Images,
+  Trash2,
 } from "lucide-react";
 import { motion, AnimatePresence, useScroll, useTransform, useSpring } from "framer-motion";
 import { useSession, signOut } from "next-auth/react";
@@ -83,6 +84,10 @@ function getChatErrorMessage(errorData: unknown, status: number) {
 
   if (status === 501 || code === "AI_NOT_CONFIGURED") {
     return "Gemini API belum dikonfigurasi di server. Tambahkan GEMINI_API_KEY atau GOOGLE_API_KEY di backend lalu restart server.";
+  }
+
+  if (status === 503 && code === "AI_BUSY") {
+    return "Model AI sedang sibuk/overload. Silakan coba lagi sebentar lagi.";
   }
 
   if (typeof rawMessage === "string" && rawMessage.trim() && status < 500) {
@@ -576,6 +581,27 @@ export default function DashboardPage() {
     }
   };
 
+  const deleteSession = async (id: number) => {
+    const email = session?.user?.email;
+    if (!email) return;
+    const ok = window.confirm("Hapus riwayat chat ini? Tindakan ini tidak dapat dibatalkan.");
+    if (!ok) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/chat-sessions/${id}?email=${encodeURIComponent(email)}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`Delete failed: HTTP ${res.status}`);
+      setSidebarSessions((prev) => prev.filter((s) => s.id !== id));
+      if (resultSession === id) {
+        setResultSession(0);
+        setMessages([]);
+        setPrediction(null);
+        setView("home");
+      }
+    } catch (e) {
+      console.error("Delete session error:", e);
+      alert("Gagal menghapus riwayat chat. Silakan coba lagi.");
+    }
+  };
+
   const handleCopy = (text: string, id: string) => { navigator.clipboard.writeText(text); setCopiedMessageId(id); setTimeout(() => setCopiedMessageId(null), 2000); };
   const startEditing = (msg: ChatMessage) => { setEditingMessageId(msg.id); setEditText(msg.text); };
   const handleEditSubmit = async (id: string) => { if (!editText.trim()) return; const index = messages.findIndex(m => m.id === id); if (index === -1) return; setMessages(messages.slice(0, index)); setEditingMessageId(null); sendChat(editText); };
@@ -622,29 +648,39 @@ export default function DashboardPage() {
             <button onClick={() => { resetToHome(); setResultSession(0); setMessages([]); setScanSidebarOpen(false); }} className="flex w-full items-center gap-2 p-2.5 rounded-lg border text-sm font-medium transition-all" style={{ background: theme === "light" ? "rgba(91, 158, 42, 0.08)" : "rgba(91, 158, 42, 0.2)", color: theme === "light" ? "#3a6219" : "#f3f9ec", borderColor: theme === "light" ? "rgba(91, 158, 42, 0.15)" : "rgba(91, 158, 42, 0.3)" }}><MessageSquare className="h-4 w-4" /><span>Chat Baru</span></button>
             <div className="space-y-1">
               <p className="px-3 font-pixel text-[10px] uppercase mb-2" style={{ opacity: theme === "light" ? 0.6 : 0.5, color: theme === "light" ? "#3a6219" : "inherit" }}>RIWAYAT</p>
-               {sidebarSessions.map(s => {
+              {sidebarSessions.map(s => {
                  const dateObj = new Date(s.created_at);
                  const formattedDate = !isNaN(dateObj.getTime()) 
                    ? dateObj.toLocaleDateString("id-ID", { day: 'numeric', month: 'short' })
                    : "";
                  const isActive = resultSession === s.id;
                  return (
-                   <button 
-                     key={s.id} 
-                     onClick={() => loadSession(s.id)} 
-                     aria-current={isActive ? "page" : undefined}
-                     className={`w-full p-2.5 text-xs rounded-lg text-left group transition-all flex flex-col gap-1 border ${isActive ? (theme === "light" ? "bg-primary-50 text-primary-700 shadow-sm border-primary-100" : "bg-primary-900/30 text-primary-200 border-primary-500/20") : "border-transparent hover:border-black/10 dark:hover:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 opacity-70 hover:opacity-100"}`}
-                   >
-                     <div className="flex items-center justify-between w-full">
-                       <div className="flex items-center truncate">
-                         <Bot className="inline h-3.5 w-3.5 mr-2.5 opacity-40 shrink-0" />
-                         <span className="truncate font-medium">{s.title || s.diagnosis || "Sesi Chat"}</span>
-                      </div>
-                      <span className="text-[9px] opacity-40 shrink-0 ml-2">{formattedDate}</span>
-                    </div>
-                  </button>
-                );
-              })}
+                   <div key={s.id} className="flex items-stretch gap-1.5 group">
+                     <button
+                       onClick={() => loadSession(s.id)}
+                       aria-current={isActive ? "page" : undefined}
+                       className={`flex-1 w-full p-2.5 text-xs rounded-lg text-left transition-all flex flex-col gap-1 border ${isActive ? (theme === "light" ? "bg-primary-50 text-primary-700 shadow-sm border-primary-100" : "bg-primary-900/30 text-primary-200 border-primary-500/20") : "border-transparent hover:border-black/10 dark:hover:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 opacity-70 hover:opacity-100"}`}
+                     >
+                       <div className="flex items-center justify-between w-full">
+                         <div className="flex items-center truncate">
+                           <Bot className="inline h-3.5 w-3.5 mr-2.5 opacity-40 shrink-0" />
+                           <span className="truncate font-medium">{s.title || s.diagnosis || "Sesi Chat"}</span>
+                         </div>
+                         <span className="text-[9px] opacity-40 shrink-0 ml-2">{formattedDate}</span>
+                       </div>
+                     </button>
+                     <button
+                       type="button"
+                       onClick={() => deleteSession(s.id)}
+                       className={`w-9 shrink-0 rounded-lg border flex items-center justify-center transition-all ${theme === "light" ? "border-transparent hover:border-red-200 hover:bg-red-50 text-slate-500 hover:text-red-600" : "border-transparent hover:border-red-500/20 hover:bg-red-500/10 text-slate-300 hover:text-red-300"} opacity-70 group-hover:opacity-100`}
+                       aria-label="Hapus sesi chat"
+                       title="Hapus sesi"
+                     >
+                       <Trash2 className="h-4 w-4" />
+                     </button>
+                   </div>
+                 );
+               })}
             </div>
           </div>
           <div className="p-4 border-t" style={{ borderColor: theme === "light" ? "rgba(107, 82, 41, 0.08)" : "rgba(255, 255, 255, 0.05)" }}>
