@@ -687,7 +687,7 @@ export default function DashboardPage() {
           <AnimatePresence mode="wait">
             {renderView === "home" && <HomeView activeSection={activeSection} setView={setView} setMessages={setMessages} setPrediction={setPrediction} setScanFile={setScanFile} setScanPreviewUrl={setScanPreviewUrl} setResultSession={setResultSession} setScanSidebarOpen={setScanSidebarOpen} containerRef={mainScrollRef} />}
             {renderView === "chat" && (
-              <motion.div key="chat" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto w-full max-w-3xl px-3 md:px-5 pt-4 md:pt-8 pb-32 space-y-6 md:space-y-8 font-inter relative z-10">
+              <motion.div key="chat" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mx-auto w-full max-w-3xl px-3 md:px-5 pt-4 md:pt-8 pb-24 md:pb-28 space-y-6 md:space-y-8 font-inter relative z-10">
                   {messages.map((m, idx) => {
                     const scanIndex = messages.filter((msg, i) => i <= idx && (msg.role === "system" || msg.prediction)).length;
                     return (
