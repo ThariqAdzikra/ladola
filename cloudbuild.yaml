@@ -17,5 +17,9 @@ steps:
       - --allow-unauthenticated
       - --memory=2Gi
       - --port=8080
+
 images:
   - asia-east1-docker.pkg.dev/$PROJECT_ID/chilliguard/chilliguard:$SHORT_SHA
+
+options:
+  logging: CLOUD_LOGGING_ONLY
