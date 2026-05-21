@@ -21,6 +21,14 @@ const pixelifySans = Pixelify_Sans({
 export const metadata: Metadata = {
   title: "ChilliGuard - AI Disease Detection",
   description: "Advanced AI-powered chilli disease detection platform",
+  icons: {
+    icon: [
+      {
+        url: "/img/logo.png",
+        type: "image/png",
+      },
+    ],
+  },
 };
 
 export default function RootLayout({

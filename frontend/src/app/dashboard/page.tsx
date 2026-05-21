@@ -916,14 +916,28 @@ export default function DashboardPage() {
                   </div>
                 )}
                 <div className="absolute -bottom-5 left-1/2 -translate-x-1/2">
-                   <div className="h-10 w-10 flex items-center justify-center rounded-2xl bg-white dark:bg-slate-800 shadow-lg border border-black/5 dark:border-white/10">
-                      <Loader2 className="h-5 w-5 text-primary-500 animate-spin" />
+                   <div
+                     className="h-10 w-10 flex items-center justify-center rounded-2xl shadow-lg border transition-colors duration-300"
+                     style={{
+                       background: theme === "light" ? "rgba(255,255,255,0.92)" : "rgba(30,41,59,0.92)",
+                       borderColor: theme === "light" ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.12)",
+                     }}
+                   >
+                      <Loader2
+                        className="h-5 w-5 animate-spin"
+                        style={{ color: theme === "light" ? "#5b9e2a" : "#9dd16b" }}
+                      />
                    </div>
                 </div>
               </div>
               <div className="mt-12 text-center">
                  <p className="font-pixel text-sm tracking-[0.3em] uppercase transition-colors" style={{ color: theme === "light" ? "#3a6219" : "#7cbd40" }}>Memproses Diagnosis</p>
-                 <p className="mt-2 text-[10px] font-bold opacity-30 tracking-widest uppercase">Kecerdasan Buatan Sedang Menganalisis...</p>
+                 <p
+                   className="mt-2 text-[10px] font-bold tracking-widest uppercase transition-colors duration-300"
+                   style={{ color: theme === "light" ? "rgba(107, 82, 41, 0.45)" : "rgba(148, 163, 184, 0.6)" }}
+                 >
+                   Kecerdasan Buatan Sedang Menganalisis...
+                 </p>
               </div>
            </motion.div>
         )}
