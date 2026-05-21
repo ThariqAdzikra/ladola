@@ -1,21 +1,54 @@
 # ChilliGuard
 
-AI-powered chili disease detection with a CNN backend and a Next.js frontend.
+ChilliGuard adalah aplikasi web untuk mendeteksi penyakit tanaman cabai dari gambar (CNN) dan menyediakan konsultasi lanjutan via chat AI berbasis konteks hasil diagnosis.
 
-## Structure
+## Kegunaan
+
+- Membantu petani/penyuluh mengidentifikasi penyakit dari foto daun/buah cabai
+- Menyediakan ringkasan diagnosis (label, confidence, severity, dan info pendukung)
+- Memberi saran/tanya-jawab lanjutan lewat chat AI berbasis konteks hasil scan
+- Menyimpan riwayat sesi untuk dilihat ulang
+
+## Struktur Repo
 
 ```text
 ChilliGuard/
-|-- backend/    # FastAPI API + PyTorch inference
-|   |-- model/  # Trained model artifacts (.pth and .json)
-`-- frontend/   # Next.js app
+|-- backend/     # FastAPI API + inference PyTorch + DB endpoints
+|   |-- model/   # Model terlatih (.pth) + metadata kelas (.json)
+`-- frontend/    # Next.js UI + NextAuth (Google OAuth)
 ```
 
-## Dataset
+## Tech Stack
 
-The training dataset has been removed from the production repository to reduce size. The model is already trained and stored in `backend/model/`.
+### Frontend (`frontend/`)
 
-The model detects 9 classes:
+- Next.js `16.2.6` (App Router)
+- React `19` + TypeScript `5`
+- Tailwind CSS `v4` (+ typography)
+- NextAuth `v4` (Google OAuth)
+- Framer Motion, Lucide Icons
+- `react-markdown` + `remark-gfm` (render pesan chat)
+
+### Backend (`backend/`)
+
+- FastAPI + Uvicorn
+- PyTorch (CPU) + Torchvision (inference CNN)
+- Pillow + NumPy (preprocessing gambar)
+- SQLAlchemy + (opsional) Postgres via `psycopg2-binary` (history & user sync)
+- Pydantic v2 (schema)
+- Integrasi Gemini via `google-generativeai`
+
+### Infra / Deployment
+
+- Single production container: Nginx reverse proxy + FastAPI + Next.js (standalone)
+- Multi-stage build: Node (build) + Python (runtime)
+- Target deploy: Google Cloud Run (port `8080`)
+
+## Dataset & Kelas Deteksi
+
+Dataset training tidak disertakan di repo produksi untuk mengurangi ukuran. Model sudah dilatih dan disimpan di `backend/model/`.
+
+Model mendeteksi 9 kelas (referensi utama: `backend/model/class_names.json`):
 
 1. Antraknosa (`chilli_anthracnos`)
 2. Layu Fusarium (`chilli_damping_off`)
@@ -27,7 +60,14 @@ The model detects 9 classes:
 8. Kutu Kebul (`chilli_whitefly`)
 9. Menguning (`chilli_yellowish`)
 
-## Local Setup
+## Menjalankan Secara Lokal
+
+### Prasyarat
+
+- Node.js >= 22
+- Python >= 3.12
+- (Opsional) Postgres untuk database production/staging
+- (Opsional) Google OAuth credentials untuk login via Google
 
 ### Backend
 
@@ -37,13 +77,14 @@ python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 Copy-Item .env.example .env
-```
-
-Run the API:
-
-```powershell
 uvicorn main:app --reload --port 8000
 ```
+
+Backend tersedia di `http://localhost:8000` (healthcheck: `GET /health`).
+
+Catatan database:
+- Bila `DATABASE_URL` kosong dan `APP_ENV` bukan `production`, backend akan fallback ke SQLite (`backend/chilliguard.db`).
+- Jika DB tidak siap, endpoint yang butuh DB akan mengembalikan `503`.
 
 ### Frontend
 
@@ -54,69 +95,91 @@ npm install
 npm run dev
 ```
 
-## Cloud Run Deployment
+Frontend tersedia di `http://localhost:3000`.
 
-Production deployment uses a single root `Dockerfile`. The container packages both frontend and backend, served via Nginx on port `8080`.
+## Environment Variables
 
-### Deployment Steps
+### Backend (`backend/.env`)
 
-1.  **Build and Push Image:**
-    ```bash
-    gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/chilliguard
-    ```
+Mulai dari `backend/.env.example`.
 
-2.  **Deploy to Cloud Run:**
-    ```bash
-    gcloud run deploy chilliguard \
-      --image gcr.io/YOUR_PROJECT_ID/chilliguard \
-      --platform managed \
-      --port 8080 \
-      --allow-unauthenticated
-    ```
+- `MODEL_PATH` - path ke model CNN (`.pth`)
+- `CLASS_NAMES_PATH` - metadata kelas (`.json`)
+- `ALLOWED_ORIGINS` - CORS origins untuk frontend (comma-separated)
+- `MAX_UPLOAD_MB` - batas upload (MB)
+- `APP_ENV` - `development` atau `production`
+- `DATABASE_URL` - koneksi Postgres (opsional di dev; akan fallback SQLite)
+- `GEMINI_API_KEY` atau `GOOGLE_API_KEY` - API key Gemini
+- `GEMINI_MODEL` - model utama (default di backend: `gemini-2.0-flash-lite` jika env kosong)
+- `GEMINI_FALLBACK_MODELS` - fallback model names, dipisah koma
 
-### Required Environment Variables
+### Frontend (`frontend/.env.local`)
 
-Set these in the Cloud Run service configuration (**Variables & secrets → Environment variables**).
+Mulai dari `frontend/.env.example`.
 
-You can copy-paste the block below and replace the values that are marked with `<>`:
+- `NEXT_PUBLIC_API_URL` - base URL backend untuk browser (mis. `http://localhost:8000`)
+- `BACKEND_API_URL` - base URL backend untuk server-side (Next.js)
+- `NEXTAUTH_URL` - URL publik frontend
+- `NEXTAUTH_SECRET` - secret panjang acak
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - Google OAuth
+
+## Endpoint Utama (Ringkas)
+
+- `GET /health` - healthcheck backend
+- `POST /predict` - inference penyakit dari gambar
+- `POST /chat` - chat AI (Gemini) berbasis konteks diagnosis + history
+- `GET /diseases` - daftar info penyakit
+- `GET /api/chat-sessions?email=...` - list sesi chat
+- `GET /api/chat-sessions/{id}` - detail sesi chat + messages
+- `POST /api/chat-sessions/{id}/messages` - append message ke sesi
+
+## Deployment (Google Cloud Run)
+
+Deploy production menggunakan root `Dockerfile` (single container: frontend + backend + nginx), diekspos di port `8080`.
+
+### Build & Deploy
+
+```bash
+gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/chilliguard
+gcloud run deploy chilliguard \
+  --image gcr.io/YOUR_PROJECT_ID/chilliguard \
+  --platform managed \
+  --port 8080 \
+  --allow-unauthenticated
+```
+
+### Env Vars (Cloud Run)
+
+Contoh (ganti nilai yang bertanda `<>`):
 
 ```env
-# App/runtime
 APP_ENV=production
 
-# CORS for backend (comma-separated allowed origins)
-ALLOWED_ORIGINS=https://chilliguard.dpdns.org
-
-# Database
+ALLOWED_ORIGINS=https://<YOUR_DOMAIN>
 DATABASE_URL=<your_postgres_url>
 
-# Gemini / Generative AI (backend reads GEMINI_API_KEY or GOOGLE_API_KEY)
+# Gemini (backend membaca GOOGLE_API_KEY atau GEMINI_API_KEY)
 GEMINI_API_KEY=<your_gemini_api_key>
-# (optional alternative name)
-# GOOGLE_API_KEY=<your_gemini_api_key>
-GEMINI_MODEL=gemini-3.1-flash-lite
+GEMINI_MODEL=gemini-2.0-flash-lite
 GEMINI_FALLBACK_MODELS=gemini-2.5-flash
 
-# NextAuth (frontend)
-NEXTAUTH_URL=https://chilliguard.dpdns.org
+# NextAuth
+NEXTAUTH_URL=https://<YOUR_DOMAIN>
 NEXTAUTH_SECRET=<your_random_long_secret>
 GOOGLE_CLIENT_ID=<your_google_oauth_client_id>
 GOOGLE_CLIENT_SECRET=<your_google_oauth_client_secret>
 
-# Frontend → backend (server-side calls from Next.js route handlers)
-# In this single-container deployment, the backend is available on localhost:8000.
+# Single container: backend tersedia di localhost:8000
 BACKEND_API_URL=http://127.0.0.1:8000
 
-# Browser → API base URL used by the UI (points to the public Cloud Run URL)
-NEXT_PUBLIC_API_URL=https://chilliguard.dpdns.org
+# Browser mengarah ke domain publik
+NEXT_PUBLIC_API_URL=https://<YOUR_DOMAIN>
 
-# Model paths inside the container (optional; defaults already work)
 MODEL_PATH=./model/chilliscan_cnn.pth
 CLASS_NAMES_PATH=./model/class_names.json
 MAX_UPLOAD_MB=10
 ```
 
 Notes:
-- Do **not** duplicate keys (e.g. only one `DATABASE_URL`).
-- For Google OAuth, the redirect URI must be `https://chilliguard.dpdns.org/api/auth/callback/google` (adjust domain if different).
-- If you accidentally exposed any secrets, rotate them (DB password, Gemini key, NextAuth secret, Google client secret).
+- Hindari duplikasi key (mis. cukup satu `DATABASE_URL`).
+- Redirect URI Google OAuth: `https://<YOUR_DOMAIN>/api/auth/callback/google`.
