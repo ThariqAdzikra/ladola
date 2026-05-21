@@ -35,7 +35,7 @@ type PredictionResult = {
   treatment: string[]; prevention: string[]; all_scores: ScoreItem[]; inference_time_ms: number;
 };
 type ChatMessage = { id: string; role: "user" | "assistant" | "system"; text: string; image?: string; prediction?: PredictionResult; };
-type StoredChatSession = { id: string; title: string; created_at: string; diagnosis?: string; };
+type StoredChatSession = { id: number; title: string; created_at: string; diagnosis?: string; };
 
 const VIEW_TRANSITION = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 }, transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const } };
 
@@ -511,6 +511,14 @@ export default function DashboardPage() {
     setMessages(prev => [...prev, userMsg]);
     setChatInput(""); 
     setIsTyping(true);
+
+    if (resultSession > 0) {
+      void fetch(`${API_BASE}/api/chat-sessions/${resultSession}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sender: "user", text }),
+      });
+    }
     
     try {
       // Map history to match backend expectations (Gemini roles: user and model)
@@ -538,17 +546,17 @@ export default function DashboardPage() {
         throw new Error(getChatErrorMessage(errorData, res.status));
       }
       
-      const data = await safeJson<{ text: string }>(res);
-      const aiMsg: ChatMessage = { id: generateMessageId("ai"), role: "assistant", text: data.text };
-      setMessages(prev => [...prev, aiMsg]);
-      
-      if (resultSession > 0) {
-        fetch(`${API_BASE}/api/chat-sessions/${resultSession}/messages`, { 
-          method: "POST", 
-          headers: { "Content-Type": "application/json" }, 
-          body: JSON.stringify({ sender: "ai", text: data.text }) 
-        });
-      }
+       const data = await safeJson<{ text: string }>(res);
+       const aiMsg: ChatMessage = { id: generateMessageId("ai"), role: "assistant", text: data.text };
+       setMessages(prev => [...prev, aiMsg]);
+       
+       if (resultSession > 0) {
+        void fetch(`${API_BASE}/api/chat-sessions/${resultSession}/messages`, { 
+           method: "POST", 
+           headers: { "Content-Type": "application/json" }, 
+           body: JSON.stringify({ sender: "ai", text: data.text }) 
+         });
+       }
     } catch (err) { 
       console.error("Chat Error:", err);
       const message = err instanceof Error ? err.message : "Maaf, layanan AI sedang tidak dapat dihubungi. Silakan coba lagi nanti.";
@@ -614,21 +622,23 @@ export default function DashboardPage() {
             <button onClick={() => { resetToHome(); setResultSession(0); setMessages([]); setScanSidebarOpen(false); }} className="flex w-full items-center gap-2 p-2.5 rounded-lg border text-sm font-medium transition-all" style={{ background: theme === "light" ? "rgba(91, 158, 42, 0.08)" : "rgba(91, 158, 42, 0.2)", color: theme === "light" ? "#3a6219" : "#f3f9ec", borderColor: theme === "light" ? "rgba(91, 158, 42, 0.15)" : "rgba(91, 158, 42, 0.3)" }}><MessageSquare className="h-4 w-4" /><span>Chat Baru</span></button>
             <div className="space-y-1">
               <p className="px-3 font-pixel text-[10px] uppercase mb-2" style={{ opacity: theme === "light" ? 0.6 : 0.5, color: theme === "light" ? "#3a6219" : "inherit" }}>RIWAYAT</p>
-              {sidebarSessions.map(s => {
-                const dateObj = new Date(s.created_at);
-                const formattedDate = !isNaN(dateObj.getTime()) 
-                  ? dateObj.toLocaleDateString("id-ID", { day: 'numeric', month: 'short' })
-                  : "";
-                return (
-                  <button 
-                    key={s.id} 
-                    onClick={() => loadSession(Number(s.id))} 
-                    className={`w-full p-2.5 text-xs rounded-lg text-left group transition-all flex flex-col gap-1 ${String(resultSession) === s.id ? (theme === "light" ? "bg-primary-50 text-primary-700 shadow-sm" : "bg-primary-900/30 text-primary-400") : "hover:bg-black/5 opacity-70 hover:opacity-100"}`}
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center truncate">
-                        <Bot className="inline h-3.5 w-3.5 mr-2.5 opacity-40 shrink-0" />
-                        <span className="truncate font-medium">{s.title || s.diagnosis || "Sesi Chat"}</span>
+               {sidebarSessions.map(s => {
+                 const dateObj = new Date(s.created_at);
+                 const formattedDate = !isNaN(dateObj.getTime()) 
+                   ? dateObj.toLocaleDateString("id-ID", { day: 'numeric', month: 'short' })
+                   : "";
+                 const isActive = resultSession === s.id;
+                 return (
+                   <button 
+                     key={s.id} 
+                     onClick={() => loadSession(s.id)} 
+                     aria-current={isActive ? "page" : undefined}
+                     className={`w-full p-2.5 text-xs rounded-lg text-left group transition-all flex flex-col gap-1 border ${isActive ? (theme === "light" ? "bg-primary-50 text-primary-700 shadow-sm border-primary-100" : "bg-primary-900/30 text-primary-200 border-primary-500/20") : "border-transparent hover:border-black/10 dark:hover:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 opacity-70 hover:opacity-100"}`}
+                   >
+                     <div className="flex items-center justify-between w-full">
+                       <div className="flex items-center truncate">
+                         <Bot className="inline h-3.5 w-3.5 mr-2.5 opacity-40 shrink-0" />
+                         <span className="truncate font-medium">{s.title || s.diagnosis || "Sesi Chat"}</span>
                       </div>
                       <span className="text-[9px] opacity-40 shrink-0 ml-2">{formattedDate}</span>
                     </div>
