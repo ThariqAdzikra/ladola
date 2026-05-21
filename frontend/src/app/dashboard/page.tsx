@@ -343,6 +343,10 @@ export default function DashboardPage() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null); const [editText, setEditText] = useState("");
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null); const [scanSidebarOpen, setScanSidebarOpen] = useState(false);
   const [sidebarSessions, setSidebarSessions] = useState<StoredChatSession[]>([]); const [isTyping, setIsTyping] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; title: string } | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [cameraFacingUser, setCameraFacingUser] = useState(false);
   const isAnalyzingRef = useRef(false);
   const mainScrollRef = useRef<HTMLElement>(null); const videoRef = useRef<HTMLVideoElement>(null); 
@@ -581,11 +585,33 @@ export default function DashboardPage() {
     }
   };
 
+  const openDeleteDialog = useCallback((target: StoredChatSession) => {
+    setDeleteError(null);
+    setDeleteTarget({ id: target.id, title: target.title || target.diagnosis || "Sesi Chat" });
+    setDeleteDialogOpen(true);
+  }, []);
+
+  const closeDeleteDialog = useCallback(() => {
+    if (deleteBusy) return;
+    setDeleteDialogOpen(false);
+    setDeleteTarget(null);
+    setDeleteError(null);
+  }, [deleteBusy]);
+
+  useEffect(() => {
+    if (!deleteDialogOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeDeleteDialog();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [deleteDialogOpen, closeDeleteDialog]);
+
   const deleteSession = async (id: number) => {
     const email = session?.user?.email;
     if (!email) return;
-    const ok = window.confirm("Hapus riwayat chat ini? Tindakan ini tidak dapat dibatalkan.");
-    if (!ok) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
     try {
       const res = await fetch(`${API_BASE}/api/chat-sessions/${id}?email=${encodeURIComponent(email)}`, { method: "DELETE" });
       if (!res.ok) throw new Error(`Delete failed: HTTP ${res.status}`);
@@ -596,9 +622,12 @@ export default function DashboardPage() {
         setPrediction(null);
         setView("home");
       }
+      closeDeleteDialog();
     } catch (e) {
       console.error("Delete session error:", e);
-      alert("Gagal menghapus riwayat chat. Silakan coba lagi.");
+      setDeleteError("Gagal menghapus riwayat chat. Silakan coba lagi.");
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -629,6 +658,116 @@ export default function DashboardPage() {
       <AnimatePresence>
         {scanSidebarOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setScanSidebarOpen(false)} className="fixed inset-0 z-[140] bg-black/20 backdrop-blur-sm lg:hidden" />
+        )}
+      </AnimatePresence>
+      
+      <AnimatePresence>
+        {deleteDialogOpen && deleteTarget && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[260] flex items-end sm:items-center justify-center p-4"
+          >
+            <motion.button
+              type="button"
+              aria-label="Tutup dialog"
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={closeDeleteDialog}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cg-delete-title"
+              aria-describedby="cg-delete-desc"
+              initial={{ y: 18, opacity: 0, scale: 0.98 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 18, opacity: 0, scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 320, damping: 26 }}
+              className="relative w-full max-w-md rounded-2xl border shadow-2xl p-4 sm:p-5"
+              style={{
+                backgroundColor: theme === "light" ? "rgba(255,255,255,0.95)" : "rgba(30,41,59,0.95)",
+                borderColor: theme === "light" ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.12)",
+              }}
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 border"
+                  style={{
+                    backgroundColor: theme === "light" ? "rgba(239,68,68,0.08)" : "rgba(239,68,68,0.12)",
+                    borderColor: theme === "light" ? "rgba(239,68,68,0.22)" : "rgba(239,68,68,0.25)",
+                  }}
+                >
+                  <Trash2 className="h-5 w-5" style={{ color: theme === "light" ? "#dc2626" : "#fca5a5" }} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 id="cg-delete-title" className="text-sm font-bold" style={{ color: theme === "light" ? "#0f172a" : "#f8fafc" }}>
+                        Hapus riwayat chat?
+                      </h3>
+                      <p id="cg-delete-desc" className="mt-1 text-xs leading-relaxed" style={{ color: theme === "light" ? "#475569" : "#cbd5e1" }}>
+                        Riwayat untuk <span className="font-semibold">{deleteTarget.title}</span> akan dihapus permanen dan tidak dapat dibatalkan.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={closeDeleteDialog}
+                      disabled={deleteBusy}
+                      className="p-2 rounded-lg transition-all opacity-60 hover:opacity-100 disabled:opacity-30"
+                      aria-label="Tutup"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {deleteError && (
+                    <div className="mt-3 text-xs font-medium rounded-lg border px-3 py-2"
+                      style={{
+                        color: theme === "light" ? "#b91c1c" : "#fecaca",
+                        backgroundColor: theme === "light" ? "rgba(239,68,68,0.08)" : "rgba(239,68,68,0.12)",
+                        borderColor: theme === "light" ? "rgba(239,68,68,0.22)" : "rgba(239,68,68,0.2)",
+                      }}
+                    >
+                      {deleteError}
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex flex-col sm:flex-row gap-2 sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={closeDeleteDialog}
+                      disabled={deleteBusy}
+                      className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-semibold border transition-all disabled:opacity-50"
+                      style={{
+                        backgroundColor: theme === "light" ? "rgba(255,255,255,0.9)" : "rgba(15,23,42,0.35)",
+                        borderColor: theme === "light" ? "rgba(0,0,0,0.08)" : "rgba(255,255,255,0.12)",
+                        color: theme === "light" ? "#0f172a" : "#e2e8f0",
+                      }}
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteSession(deleteTarget.id)}
+                      disabled={deleteBusy}
+                      className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                      style={{
+                        backgroundColor: theme === "light" ? "#ef4444" : "rgba(239,68,68,0.95)",
+                        color: "white",
+                      }}
+                    >
+                      {deleteBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      Hapus
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -671,7 +810,7 @@ export default function DashboardPage() {
                      </button>
                      <button
                        type="button"
-                       onClick={() => deleteSession(s.id)}
+                       onClick={() => openDeleteDialog(s)}
                        className={`w-9 shrink-0 rounded-lg border flex items-center justify-center transition-all ${theme === "light" ? "border-transparent hover:border-red-200 hover:bg-red-50 text-slate-500 hover:text-red-600" : "border-transparent hover:border-red-500/20 hover:bg-red-500/10 text-slate-300 hover:text-red-300"} opacity-70 group-hover:opacity-100`}
                        aria-label="Hapus sesi chat"
                        title="Hapus sesi"
