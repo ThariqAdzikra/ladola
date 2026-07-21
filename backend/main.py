@@ -17,6 +17,36 @@ from pathlib import Path
 from typing import Any
 from contextlib import asynccontextmanager
 
+BASE_DIR = Path(__file__).resolve().parent
+REPO_ROOT = BASE_DIR.parent
+
+
+def _ensure_temp_directory() -> None:
+    """Force a usable temp directory before importing libraries that need one."""
+    import tempfile
+
+    candidates = []
+    for env_name in ("TEMP", "TMP", "TMPDIR"):
+        raw_value = os.getenv(env_name)
+        if raw_value:
+            candidates.append(Path(raw_value))
+    candidates.extend([BASE_DIR / ".tmp", REPO_ROOT / ".tmp"])
+
+    for candidate in candidates:
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            if candidate.is_dir():
+                os.environ["TEMP"] = str(candidate)
+                os.environ["TMP"] = str(candidate)
+                os.environ["TMPDIR"] = str(candidate)
+                tempfile.tempdir = str(candidate)
+                return
+        except Exception:
+            continue
+
+
+_ensure_temp_directory()
+
 # Third-party imports
 # pyrefly: ignore [missing-import]
 import torch
@@ -44,8 +74,6 @@ from database import Base, database_url_safe, engine, engine_error, get_db
 from models import User, Scan, ChatSession, Message
 
 
-BASE_DIR = Path(__file__).resolve().parent
-REPO_ROOT = BASE_DIR.parent
 DEFAULT_MODEL_DIR = BASE_DIR / "model"
 
 # Load environment variables from multiple possible locations
