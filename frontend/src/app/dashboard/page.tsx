@@ -210,9 +210,20 @@ function HomeView({
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: i * 0.2 }}
-              whileHover={{ y: -10 }}
-              className="relative z-10 flex flex-col items-center p-8 text-center rounded-[2rem] border-2 drop-shadow-sm flex-1 transition-all" style={{ backgroundColor: theme === "light" ? "rgba(255,255,255,0.8)" : "rgba(30,41,59,0.8)", borderColor: theme === "light" ? "white" : "rgba(51,65,85,1)", backdropFilter: "blur(12px)" }}
+              transition={{ 
+                duration: 0.5, 
+                delay: i * 0.2,
+                y: { type: "spring", stiffness: 350, damping: 25 },
+                scale: { type: "spring", stiffness: 350, damping: 25 }
+              }}
+              whileHover={{ y: -8, scale: 1.02 }}
+              className="relative z-10 flex flex-col items-center p-8 text-center rounded-[2rem] border-2 flex-1 cursor-pointer shadow-md hover:shadow-2xl transition-[box-shadow,border-color,background-color] duration-300 ease-out" 
+              style={{ 
+                backgroundColor: theme === "light" ? "rgba(255,255,255,0.85)" : "rgba(30,41,59,0.85)", 
+                borderColor: theme === "light" ? "white" : "rgba(51,65,85,1)", 
+                backdropFilter: "blur(12px)",
+                willChange: "transform"
+              }}
             >
               <div className="absolute -top-4 -right-4 w-10 h-10 rounded-full flex items-center justify-center text-white font-pixel text-lg bg-[#5b9e2a] border-2 border-white shadow-md">{i + 1}</div>
               <div className="relative h-20 w-20 mb-6 pixelated"><NextImage src={step.icon} alt={step.title} fill sizes="80px" className="object-contain" /></div>
@@ -275,12 +286,18 @@ function HomeView({
           ].map((b, i) => (
             <motion.div 
               key={i} 
-              initial={{ opacity: 0, x: -20, filter: "drop-shadow(0px 0px 0px rgba(0,0,0,0))" }}
-              whileInView={{ opacity: 1, x: 0, filter: "drop-shadow(0px 0px 0px rgba(0,0,0,0))" }}
+              initial={{ opacity: 0, x: -20 }}
+              whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: i * 0.15 }}
-              whileHover={{ y: -16, scale: 1.02, zIndex: 50, filter: "drop-shadow(0px 25px 20px rgba(0,0,0,0.2))" }} 
-              className="flex-1 flex flex-col relative cursor-pointer" style={{ zIndex: i }}
+              transition={{ 
+                duration: 0.5, 
+                delay: i * 0.15,
+                y: { type: "spring", stiffness: 350, damping: 25 },
+                scale: { type: "spring", stiffness: 350, damping: 25 }
+              }}
+              whileHover={{ y: -8, scale: 1.02, zIndex: 40 }} 
+              className="flex-1 flex flex-col relative cursor-pointer transition-[filter] duration-300 ease-out hover:drop-shadow-[0_20px_25px_rgba(0,0,0,0.2)]" 
+              style={{ zIndex: i, willChange: "transform" }}
             >
               <div className={`absolute inset-0 ${b.radius} ${b.hasSocket ? "puzzle-mask" : ""}`} style={{ background: b.bg }} />
               {b.hasTab && <div className="puzzle-tab puzzle-tab-pos" style={{ backgroundColor: b.bg }} />}
