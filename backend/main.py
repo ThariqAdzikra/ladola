@@ -50,6 +50,8 @@ _ensure_temp_directory()
 # Third-party imports
 # pyrefly: ignore [missing-import]
 import torch
+# Limit PyTorch CPU threads to prevent CPU thrashing/starvation on shared VPS containers
+torch.set_num_threads(1)
 # pyrefly: ignore [missing-import]
 import torch.nn as nn
 # pyrefly: ignore [missing-import]

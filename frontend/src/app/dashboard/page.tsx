@@ -391,7 +391,7 @@ export default function DashboardPage() {
       fd.append("file", file);
 
       const controller = new AbortController();
-      const tid = setTimeout(() => controller.abort(), 20000); // 20s timeout
+      const tid = setTimeout(() => controller.abort(), 75000); // 75s timeout to allow VPS CPU inference to complete
 
       const res = await fetch(`${API_BASE}/predict`, { 
         method: "POST", 
@@ -431,11 +431,15 @@ export default function DashboardPage() {
           const saveData = await saveRes.json(); setResultSession(saveData.session_id);
         } catch (e) { console.error("Save error:", e); }
       }
-    } catch (e) { 
+    } catch (e: any) { 
       console.error("Analysis Error:", e);
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 1000));
       setView("chat");
-      setMessages(prev => [...prev, { id: generateMessageId("err"), role: "assistant", text: "Maaf, terjadi gangguan saat menganalisis gambar. Silakan coba lagi." }]);
+      const isTimeout = e?.name === "AbortError" || e?.message?.toLowerCase().includes("abort");
+      const errorMsg = isTimeout
+        ? "Waktu analisis melebihi batas tunggu (server sedang memproses gambar dengan beban tinggi). Silakan coba lagi beberapa saat lagi."
+        : "Maaf, terjadi gangguan saat menganalisis gambar. Silakan coba lagi.";
+      setMessages(prev => [...prev, { id: generateMessageId("err"), role: "assistant", text: errorMsg }]);
     } finally {
       isAnalyzingRef.current = false;
       setScanFile(null);
